@@ -37,6 +37,7 @@ def usage():
         "  scripts/agent-monitor.sh --feature KEY   lọc đúng feature key\n"
         "  scripts/agent-monitor.sh --detail        hiện session id ở chế độ chữ\n"
         "  scripts/agent-monitor.sh --json          dữ liệu có cấu trúc\n"
+        "  scripts/agent-monitor.sh --html FILE     ghi trang HTML (một lần); thêm --watch 5 để ghi lại mỗi 5 giây\n"
         "  scripts/agent-monitor.sh --self-test\n"
         "\n"
         "Trong dashboard: / tìm, a tất cả session, s lọc trạng thái, esc xóa lọc, q thoát.\n"
@@ -51,6 +52,7 @@ def parse_args(argv):
         "all": False,
         "feature": None,
         "json": False,
+        "html": None,
         "detail": False,
         "self_test": False,
     }
@@ -84,6 +86,11 @@ def parse_args(argv):
             opts["detail"] = True
         elif arg == "--json":
             opts["json"] = True
+        elif arg == "--html":
+            index += 1
+            if index >= len(argv) or not argv[index].strip() or argv[index].startswith("--"):
+                die("--html cần đường dẫn file, ví dụ --html /tmp/monitor.html", 2)
+            opts["html"] = os.path.abspath(os.path.expanduser(argv[index].strip()))
         elif arg == "--self-test":
             opts["self_test"] = True
         elif arg == "--feature":
@@ -98,8 +105,10 @@ def parse_args(argv):
         index += 1
     if opts["self_test"]:
         return opts
+    if opts["html"] and opts["json"]:
+        die("Chỉ chọn một: --json hoặc --html.", 2)
     if opts["mode"] is None:
-        opts["mode"] = "once" if opts["json"] else "watch"
+        opts["mode"] = "once" if (opts["json"] or opts["html"]) else "watch"
     return opts
 
 def cell(value):
@@ -1235,12 +1244,28 @@ def load_view():
     rows, row_warnings = build_rows(snapshot)
     return snapshot, row_warnings, classify_rows(rows), snapshot.get("stats") or {}
 
+def write_html(options, rows, warnings, stats, refresh):
+    """Ghi trang HTML tĩnh (nguyên tử: file tạm rồi os.replace). Luôn gồm mọi session; trang tự lọc."""
+    from monitor_html import render_html
+    opts = dict(options, all=True)
+    payload = json_payload(rows, warnings, stats, opts)
+    path = options["html"]
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp{os.getpid()}"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(render_html(payload, refresh))
+    os.replace(tmp, path)
+
 def run_once(options):
     snapshot, warnings, rows, stats = load_view()
     if snapshot is None:
         for warning in warnings:
             print(f"- {warning}", file=sys.stderr)
         return 2
+    if options.get("html"):
+        write_html(options, rows, warnings, stats, 0)
+        print(f"Đã ghi {options['html']}")
+        return 0 if snapshot_ok(snapshot) else 2
     if options.get("json"):
         print(json.dumps(json_payload(rows, warnings, stats, options), ensure_ascii=False, indent=2))
         return 0 if snapshot_ok(snapshot) else 2
@@ -1250,7 +1275,28 @@ def run_once(options):
         emit_text(lines, clear=False)
     return 0 if snapshot_ok(snapshot) else 2
 
+def run_watch_html(options):
+    print(f"Đang ghi {options['html']} mỗi {options['seconds']}s (trang tự tải lại). Ctrl+C để dừng.", file=sys.stderr)
+    try:
+        while True:
+            started = time.monotonic()
+            snapshot, warnings, rows, stats = load_view()
+            if snapshot is None:
+                for warning in warnings:
+                    print(f"- {warning}", file=sys.stderr)
+                if shutil.which("orca") is None:
+                    return 2
+            else:
+                write_html(options, rows, warnings, stats, options["seconds"])
+            remaining = options["seconds"] - (time.monotonic() - started)
+            if remaining > 0:
+                time.sleep(remaining)
+    except KeyboardInterrupt:
+        return 0
+
 def run_watch(options):
+    if options.get("html"):
+        return run_watch_html(options)
     interactive = sys.stdout.isatty() and not options.get("json") and TEXTUAL
     if interactive:
         AgentMonitorApp(options).run()
@@ -1938,6 +1984,17 @@ def self_test():
         check("tui-all", shown_all == 4)
         check("tui-status", completed_count == 1 and status_label == "COMPLETED")
         check("tui-repo", repo_count == 1)
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from monitor_html import render_html
+        sample = {"generated_at": "2026-01-01T00:00:00+00:00", "summary": {"total": 1}, "sources": {}, "warnings": ["</script><b>x"],
+                  "orchestration": [{"origin": "orchestration", "agent": "codex", "repository": "r", "feature": "f", "task": "T1",
+                                     "bucket": "WORKING", "session": "term_1"}], "manual": []}
+        page = render_html(sample, 5)
+        check("html-render", "refresh" in page and "Agent Monitor" in page and "term_1" in page)
+        check("html-escape", "</script><b>x" not in page.split('id="data">', 1)[1].split("</script>", 1)[0] and render_html(sample, 0).count("http-equiv") == 0)
+    except Exception:
+        check("html-render", False)
     if failures:
         print("self-test failed: " + ", ".join(failures))
         return 1

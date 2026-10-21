@@ -1,0 +1,4 @@
+__pycache__/
+.serena/
+node_modules/
+.env
