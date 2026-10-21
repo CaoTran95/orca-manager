@@ -1,0 +1,19 @@
+---
+description: Orca Manager multi-repo task and worktree workflow
+alwaysApply: true
+---
+
+# Orca Manager workflow
+
+Follow AGENTS.md and docs/ORCA_MANAGER_GUIDE.md.
+
+For every new feature:
+
+1. Create or update docs/tasks/YYYY-MM-DD-<feature-key>.md.
+2. Determine the affected repositories only.
+3. Fetch the newest origin/develop; use origin/main only when develop is unavailable.
+4. Create one worktree per affected repo with the shared branch feat/<feature-key>.
+5. Record repo, base, branch, path and status before editing code.
+6. Update the task record after each meaningful milestone and before handoff.
+
+Do not reset, force-checkout, delete, or overwrite an existing worktree or local change. Do not commit credentials, .env, .serena/ or node_modules/. If a repo, branch, credential or remote is unavailable, record it as blocked with evidence.
