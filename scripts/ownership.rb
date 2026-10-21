@@ -3,6 +3,7 @@
 #   ownership.rb conflicts [--for KEY] [--paths-only]   xung đột claim; exit 1 nếu có ERROR
 #   ownership.rb registry-paths KEY                       path KEY được main duyệt (owner hoặc grandfathered)
 #   ownership.rb naming-owner PATH                        key sở hữu PATH theo tên (key dài nhất khớp)
+#   ownership.rb staging-branches                         branch harness/* được main duyệt làm vùng staging Harness
 #   ownership.rb validate [FILE]                          kiểm tra schema config/task-ownership.yaml
 #
 # Nguồn claim:
@@ -134,6 +135,11 @@ when "conflicts"
 when "registry-paths"
   k = ARGV[1].to_s
   registry.each { |p, v| puts p if v.is_a?(Hash) && (v["owner"].to_s == k || Array(v["grandfathered"]).map(&:to_s).include?(k)) }
+when "staging-branches"
+  text = git("show", "main:config/task-ownership.yaml", dir: MAIN_ROOT)
+  d = load_yaml(text)
+  st = d.is_a?(Hash) ? d["harness_staging"] : nil
+  st.each_key { |b| puts b } if st.is_a?(Hash)
 when "naming-owner"
   o = naming_owner(ARGV[1].to_s)
   puts o if o
@@ -152,11 +158,17 @@ when "validate"
     bad << "#{path}: grandfathered phải là mảng" unless v["grandfathered"].nil? || v["grandfathered"].is_a?(Array)
     bad << "#{path}: owner nằm trong grandfathered" if Array(v["grandfathered"]).include?(v["owner"])
   end
+  st = d.is_a?(Hash) ? d["harness_staging"] : nil
+  bad << "harness_staging phải là mapping" unless st.nil? || st.is_a?(Hash)
+  (st || {}).each do |b, v|
+    bad << "harness_staging #{b}: tên phải dạng harness/<topic>" unless b =~ %r{\Aharness/[A-Za-z0-9._-]+\z}
+    bad << "harness_staging #{b}: thiếu approved_by/reason" unless v.is_a?(Hash) && !v["reason"].to_s.empty?
+  end
   bad.each { |b| puts "OWNERS #{b}" }
   warn_n = (t || {}).count { |_, v| v.is_a?(Hash) && v["owner_status"] == "proposed" }
   puts "WARN #{warn_n} task có owner_status=proposed (chờ user xác nhận)" if warn_n > 0
   exit(bad.empty? ? 0 : 1)
 else
-  warn "usage: ownership.rb conflicts [--for KEY] [--paths-only] | registry-paths KEY | naming-owner PATH | validate [FILE]"
+  warn "usage: ownership.rb conflicts [--for KEY] [--paths-only] | registry-paths KEY | naming-owner PATH | staging-branches | validate [FILE]"
   exit 2
 end

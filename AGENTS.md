@@ -21,6 +21,16 @@ Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.claude/skills/`, `config/`, `s
 - Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` kiểm tra working tree, file staged và commit của branch (so với main); nội dung trùng khít main (đồng bộ do user duyệt) không bị coi là sai lệch. Chạy tự động qua hook `pre-commit` và `pre-merge-commit`, được cài bằng `scripts/install-hooks.sh` (tại main) vào `<git-common-dir>/hooks` dùng chung mọi worktree, tự tìm main lúc chạy nên không phụ thuộc path và không dùng `core.hooksPath` (path tuyệt đối sẽ im lặng mất hiệu lực khi di chuyển repo). Hook không chặn được bypass cố ý, nên Leader chạy `scripts/guard-harness.sh` ở bước Verify; `scripts/harness-status.sh` liệt kê hook/guard/độ lệch Harness của mọi worktree; `scripts/test-guard.sh` là bộ kiểm thử guard.
 - Instruction nạp theo cwd (đã kiểm chứng bằng probe 2026-10-21): Claude chỉ nạp CLAUDE.md của worktree (AGENTS.md chỉ được tham chiếu, chưa nạp) cộng `~/.claude` và memory index của project Orca Manager (dùng chung mọi worktree); Codex nạp AGENTS.md của worktree; Cursor nạp `.cursor/rules`, CLAUDE.md và AGENTS.md của worktree. Không agent nào tự đọc Harness ở main: Harness mới chỉ có hiệu lực khi các file đó TRONG worktree là bản mới. Kiểm tra bằng `scripts/harness-status.sh`; đường dẫn tồn tại không có nghĩa là đã áp dụng.
 - Trước mọi thao tác ghi, kiểm tra git worktree và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
+### Worker Isolation (Codex/Cursor không chỉnh sửa main)
+
+- Worker (Codex/Cursor) KHÔNG BAO GIỜ ghi trực tiếp vào checkout main của Orca Manager hay checkout chính của repo nghiệp vụ; chỉ làm trong linked worktree được giao. Leader chạy `scripts/guard-dispatch.sh <worktree> [--kind business|harness]` trước mỗi lần dispatch; bị từ chối thì không giao.
+- Cần worker soạn thay đổi Harness: user duyệt một branch `harness/<topic>` trong `harness_staging` (`config/task-ownership.yaml`, sửa ở main) -> tạo worktree riêng -> giao với `--kind harness` -> Leader review diff -> `scripts/integrate-harness.sh harness/<topic>` tại main (kiểm tra check-config + test-guard trong staging trước, fast-forward, xác nhận bằng tên branch). Main đã tiến thì rebase staging bằng `scripts/sync-harness.sh --apply` trước.
+- Phát hiện: hook `commit-msg` chặn commit trên main mang trailer `Co-authored-by` của Codex/Cursor; `check-config.sh` cảnh báo khi main có thay đổi chưa commit. Giới hạn đã kiểm chứng: Codex/Cursor không đặt biến môi trường nhận diện nên không chặn được theo danh tính; dựa vào dispatch preflight + phát hiện sau.
+
+## Đồng bộ Harness vào feature worktree (rebase)
+
+Mặc định là REBASE lên main, không merge: `scripts/sync-harness.sh --check [--worktree PATH]` (read-only, mô phỏng replay từng commit) rồi `scripts/sync-harness.sh --apply --worktree PATH` tại main, chỉ khi user yêu cầu. Từ chối nếu có thay đổi local, merge commit, commit đã push, đang rebase/merge dở, hoặc replay conflict; có xác nhận bằng tên branch; sao lưu `refs/orca-sync-backup/...`; không stash/reset/force-push, không tự giải conflict (conflict thì abort về nguyên trạng).
+
 ## 2. Execution modes
 
 | Mode | Được làm | Không được làm |

@@ -12,10 +12,13 @@
 #   3. File được main duyệt trong config/task-ownership.yaml (owner hoặc grandfathered).
 # Mọi path có nội dung trùng MỘT phiên bản đã từng có trên main (đồng bộ/merge từ main) không bị
 # tính là sai lệch Harness.
+# Worker isolation: commit trên main mang trailer Co-authored-by của Codex/Cursor bị chặn
+#   (--commit-msg, qua hook commit-msg); worker soạn Harness ở branch harness/* đã được main duyệt
+#   (harness_staging trong config/task-ownership.yaml) rồi tích hợp bằng scripts/integrate-harness.sh.
 # Exit 0 = hợp lệ; 1 = vi phạm; 2 = không xác định được ngữ cảnh (hook coi là chặn).
 set -uo pipefail
-staged=0; quiet=0
-for a in "$@"; do case "$a" in --staged) staged=1;; --quiet) quiet=1;; *) echo "usage: $0 [--staged] [--quiet]" >&2; exit 2;; esac; done
+staged=0; quiet=0; msgfile=""
+while [ $# -gt 0 ]; do case "$1" in --staged) staged=1;; --quiet) quiet=1;; --commit-msg) shift; msgfile=${1:-};; *) echo "usage: $0 [--staged] [--quiet] [--commit-msg FILE]" >&2; exit 2;; esac; shift; done
 say(){ [ "$quiet" = 1 ] || echo "$@"; }
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "guard: không phải git repo" >&2; exit 2; }
@@ -25,11 +28,24 @@ root_real=$(cd "$root" && pwd -P)
 branch=$(git -C "$root" symbolic-ref --short -q HEAD || echo "(detached)")
 [ -f "$main_root/config/repositories.yaml" ] || { echo "guard: không xác định được Orca Manager main ($main_root)" >&2; exit 2; }
 
+if [ -n "$msgfile" ]; then
+  if [ "$root_real" = "$main_root" ] && [ "$branch" = "main" ] && grep -qiE '^Co-authored-by:.*(cursor|codex)' "$msgfile" 2>/dev/null; then
+    echo "guard: commit trên main mang trailer Co-authored-by của worker Codex/Cursor — bị chặn (Worker Isolation)." >&2
+    echo "Worker soạn Harness ở worktree harness/<topic> đã được duyệt; Leader review rồi tích hợp bằng scripts/integrate-harness.sh." >&2
+    exit 1
+  fi
+  exit 0
+fi
+
 if [ "$root_real" = "$main_root" ] && [ "$branch" = "main" ]; then
   say "guard: Harness owner (main) — cho phép."; exit 0
 fi
 
 own="$main_root/scripts/ownership.rb"
+if [ "$root_real" != "$main_root" ] && [[ "$branch" == harness/* ]] && ruby "$own" staging-branches 2>/dev/null | grep -Fxq -- "$branch"; then
+  say "guard: Harness staging ($branch) — cho phép; tích hợp vào main bằng scripts/integrate-harness.sh."; exit 0
+fi
+
 key=""; case "$branch" in feat/*) key=$(printf '%s' "${branch#feat/}" | tr '/' '-');; esac
 
 approved=""; conflict_paths=""

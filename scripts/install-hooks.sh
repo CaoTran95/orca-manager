@@ -14,10 +14,17 @@ common=$(cd "$(git rev-parse --git-common-dir)" && pwd -P) || exit 1
 g="$(dirname "$common")/scripts/guard-harness.sh"
 [ -x "$g" ] || { echo "guard: thiếu $g — chặn commit (fail closed). Báo user." >&2; exit 1; }
 exec "$g" --staged'
-for h in pre-commit pre-merge-commit; do
+stub_msg='#!/usr/bin/env bash
+# orca-manager-guard (cài bởi scripts/install-hooks.sh)
+common=$(cd "$(git rev-parse --git-common-dir)" && pwd -P) || exit 1
+g="$(dirname "$common")/scripts/guard-harness.sh"
+[ -x "$g" ] || { echo "guard: thiếu $g — chặn commit (fail closed). Báo user." >&2; exit 1; }
+exec "$g" --commit-msg "$1"'
+for h in pre-commit pre-merge-commit commit-msg; do
   f="$hooks/$h"
   if [ -e "$f" ] && ! grep -q 'orca-manager-guard' "$f"; then echo "$f đã tồn tại và không phải guard; dừng." >&2; exit 1; fi
-  printf '%s\n' "$stub" >"$f"; chmod +x "$f"
+  if [ "$h" = commit-msg ]; then printf '%s\n' "$stub_msg" >"$f"; else printf '%s\n' "$stub" >"$f"; fi
+  chmod +x "$f"
 done
 [ -n "$hp" ] && git config --local --unset core.hooksPath
 echo "Đã cài guard hooks vào $hooks (core.hooksPath đã gỡ nếu từng đặt)."

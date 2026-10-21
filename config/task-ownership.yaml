@@ -7,7 +7,13 @@
 #                  không làm hỏng commit hiện có. Gỡ khỏi danh sách chỉ khi user duyệt.
 # File MỚI của feature lớn: khai báo `owns:` trong front matter file chính (guard từ chối nếu
 # trùng owner/claim khác; xem scripts/ownership.rb conflicts). Chỉ liệt kê file không glob.
+# harness_staging: branch harness/<topic> mà user duyệt để worker (Codex/Cursor) soạn thay đổi Harness
+# trong worktree RIÊNG (không bao giờ trực tiếp ở main). Sau review, tích hợp vào main bằng
+# scripts/integrate-harness.sh (fast-forward, có xác nhận). Ví dụ:
+#   harness_staging:
+#     harness/sync-fix: {reason: "user duyệt 2026-10-22: sửa sync-harness.sh"}
 version: 2
+harness_staging: {}
 tasks:
   docs/tasks/2026-10-21-case9-expanded.md:
     owner: orca-manager-task-workflow

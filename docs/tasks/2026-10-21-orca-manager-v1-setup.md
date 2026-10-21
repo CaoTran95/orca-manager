@@ -83,3 +83,14 @@ Chưa chạy: giao worker thật (không có feature để giao; tránh khởi c
 - Guard đọc thay đổi ròng so với điểm tách main (gồm nội dung từ commit merge); path có nội dung trùng một phiên bản từng có trên main thì hợp lệ.
 - Nguồn commit 3e7d783 (reflog + trailer): Cursor worker (agent-monitor TUI) commit trực tiếp trên main lúc 11:13:46 để khôi phục `.githooks/` mà commit 38513a7 của chính Cursor lúc 11:13:07 đã xóa. Cùng git user, không reset/revert. Ghi nhận: worker đang ghi thẳng vào checkout main (trái ghi chú trong config/repositories.yaml).
 - Probe instruction (read-only, hỏi trong cwd `feat-content-translation-ai`, không tool): Claude nạp CLAUDE.md của worktree (bản cũ, "fallback origin/main"), KHÔNG nạp AGENTS.md; Codex nạp AGENTS.md worktree (bản cũ); Cursor nạp .cursor rule + CLAUDE.md + AGENTS.md worktree (bản cũ). Không agent nào nạp Harness mới từ main.
+
+## Update 2026-10-21 — Harness Sync (rebase), Worker Isolation, rà soát ownership (mode SETUP, main)
+
+- `scripts/sync-harness.sh` (--check/--apply): rebase lên main thay cho merge; mô phỏng replay từng commit bằng `git merge-tree`; từ chối khi có thay đổi local, merge commit, commit đã push, thao tác dở dang, conflict; xác nhận bằng tên branch; ref sao lưu `refs/orca-sync-backup/*`; conflict thật thì `rebase --abort`. Không áp dụng cho feature worktree thật trong phiên này.
+- Worker Isolation: `scripts/guard-dispatch.sh` (từ chối main/primary checkout/worktree Orca Manager cho task nghiệp vụ), staging `harness/<topic>` do user duyệt (`harness_staging`), `scripts/integrate-harness.sh` (validate trong staging rồi fast-forward), hook `commit-msg` chặn trailer Codex/Cursor trên main, cảnh báo main dirty trong `check-config.sh`. Probe env: Codex/Cursor không đặt biến nhận diện => không chặn theo danh tính được.
+- Rà soát 4 task proposed (giữ `proposed`, không đổi `confirmed`, không gỡ grandfathered). Bằng chứng git:
+  - case9-expanded: 3 commit ở orca-manager-task-workflow (8ef2a37 -> 6b1e988, bản split mới nhất), 2 commit ở content-translation-ai (8a70ee5, 9262fb9; bản trước khi tách); header "Feature key: case9-expanded" không khớp branch nào.
+  - case9b-input-change, case9b-marketing-processing: chỉ có ở orca-manager-task-workflow (commit 6b1e988); marketing-processing đang có sửa local chưa commit ở chính worktree owner.
+  - orca-manager-task-workflow: đặt tên chính là của orca-manager-task-workflow; content-translation-ai chỉ có bản sao (49c0dff).
+  - Đề xuất: owner = orca-manager-task-workflow cho cả 4; giữ content-translation-ai grandfathered đến khi user duyệt gỡ. Lưu ý: case9* về nội dung thuộc Hermes, key chưa có branch riêng.
+- Sự cố test: bản test đầu của `test-sync.sh` đã vô tình `git push` branch `feat/fp` về repo thật qua remote `origin` của clone; đã xóa branch `feat/fp` (commit test 392acdd, tôi tạo) và sửa test `git remote remove origin` ở cả hai bộ test.

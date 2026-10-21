@@ -30,7 +30,7 @@ Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-c
    Ghi repo/baseRef/branch/path/status vào bảng worktree **trước khi** giao code.
 3. **Chọn worker**: theo độ phức tạp, agent đang sẵn sàng/phiên có thể tiếp tục (`orca terminal list --json`), chi phí. Không gán cứng agent theo công nghệ. Một worktree chỉ một worker ghi tại một thời điểm.
 4. **Tra skill**: lấy skill từ registry theo repo + loại task, kiểm tra file tồn tại trong worktree được giao (`test -f "<worktree>/<path>"`), ghi path vào handoff. Chỉ truyền path, không đọc nội dung vào context Leader. Chưa xác minh Codex/Cursor tự nhận skill giống nhau nên luôn truyền path tường minh.
-5. **Giao việc** bằng `docs/tasks/HANDOFF_TEMPLATE.md`:
+5. **Giao việc** bằng `docs/tasks/HANDOFF_TEMPLATE.md` (trước đó chạy `scripts/guard-dispatch.sh <worktree>`; worker không bao giờ làm ở checkout main/primary):
    - Giao có giám sát: `orca orchestration run-create --objective "<feature>" --json`, rồi `orca orchestration worker-start --spec "<handoff>" --worktree path:<path> --agent <codex|cursor|claude> --json`; chờ bằng `orca orchestration check --wait --types worker_done,escalation,question --json`.
    - Giao đơn giản/không giám sát: dùng `orca-cli` (terminal tới phiên có sẵn bằng `orca terminal send`).
    Không khởi chạy trùng: kiểm tra `orca worktree ps --json` và `orca orchestration worker-list` trước.
@@ -65,7 +65,9 @@ Kiểm tra tối thiểu, ưu tiên rẻ trước:
 
 ## Theo dõi agent trong Terminal
 
-`scripts/agent-monitor.sh` là dashboard read-only trong Terminal. Không tạo server, không gọi AI mỗi lần refresh, không tạo/dừng agent, không sửa worktree và không đổi task.
+`scripts/agent-monitor.sh` là dashboard read-only, giao diện tối, trong Terminal. Không tạo server, không gọi AI mỗi lần refresh, không tạo/dừng agent, không sửa worktree và không đổi task.
+
+Cài giao diện tương tác một lần: `python3.11 -m pip install -r scripts/requirements-agent-monitor.txt` (gói `textual`). Không có Textual thì script in một khung chữ.
 
 ```bash
 scripts/agent-monitor.sh
@@ -77,11 +79,13 @@ scripts/agent-monitor.sh --detail
 scripts/agent-monitor.sh --json
 ```
 
-Không truyền chế độ thì dashboard tự cập nhật mỗi 5 giây và vẽ lại cùng một khung, không in chồng bảng. Mặc định chỉ hiện session đang hoạt động hoặc cần chú ý. `--all` thêm session đã hoàn thành. `--detail` mới hiện session id. `--json` xuất một object có `summary`, `orchestration` và `manual`.
+Không truyền chế độ thì dashboard mở trên terminal và tự làm mới mỗi 5 giây, không in chồng bảng. `--once` in một ảnh tĩnh. `--json` xuất một object có `summary`, `orchestration` và `manual`. `--watch` cùng `--json`, hoặc khi stdout không phải terminal, in từng dòng/khung rồi lặp lại.
 
-Summary đếm Sessions, Working, Waiting/Blocked, Completed, Interrupted/Unknown. `agent`, `worker`, `task` và `term` là bốn trạng thái riêng. Terminal còn kết nối không được tính là agent đang chạy. Thiếu dữ liệu thì trạng thái là `UNKNOWN`, không ghi `IDLE` hay `DONE`.
+Mặc định chỉ hiện session đang hoạt động hoặc cần chú ý. Trong dashboard: `/` tìm, ô Repo và Feature để lọc, `s` chuyển trạng thái, `a` hiện cả session đã hoàn thành, `esc` xóa lọc, `q` thoát. Chọn một dòng để xem panel chi tiết. `--all` và `--feature` đặt bộ lọc ban đầu. `--detail` chỉ thêm session id ở bản chữ dự phòng; dashboard và `--once` luôn có panel chi tiết.
 
-Mỗi lần refresh gọi `worktree ps`, `terminal list`, `run-list` và `worker-list` một vòng. Khi `worker-list` đã phủ mọi Run thì không gọi lại theo từng Run. `task-list` chỉ gọi cho Run có worker. `worktree list` và `repo list` chỉ gọi khi `worktree ps` không đủ để gắn repo.
+Mỗi dòng có Agent, Repo, Feature/Task, Worktree (khi terminal đủ rộng) và Activity. Ba trạng thái tách riêng: Activity của agent, Terminal (CONNECTED / DISCONNECTED / UNKNOWN) và Task. Cảnh báo và lỗi CLI chỉ nằm ở Diagnostics, không nằm trong bảng. Terminal còn kết nối không được tính là agent đang chạy. Thiếu dữ liệu thì Activity là `UNKNOWN`, không phải Working, IDLE hay DONE.
+
+Summary đếm Sessions, Working, Waiting, Completed, Interrupted/Unknown. Mỗi lần refresh gọi `worktree ps`, `terminal list`, `run-list` và `worker-list` một vòng. Khi `worker-list` đã phủ mọi Run thì không gọi lại theo từng Run. `task-list` chỉ gọi cho Run có worker. `worktree list` và `repo list` chỉ gọi khi `worktree ps` không đủ để gắn repo.
 
 ## Giới hạn Leader
 
@@ -109,7 +113,7 @@ Feature lớn nhiều task con: file mới khai báo `owns:` trong front matter 
 
 ## Đồng bộ Harness sang feature worktree
 
-Feature worktree không tự sync; Harness mới không có hiệu lực ở worktree cho tới khi CLAUDE.md/AGENTS.md trong chính worktree đó là bản mới (agent nạp instruction theo cwd). Kiểm tra bằng `scripts/harness-status.sh` (so nội dung, không suy ra từ việc đường dẫn tồn tại). Chỉ đồng bộ khi user yêu cầu và worktree sạch; không rebase/merge/stash worktree có thay đổi local. Hook guard đã áp dụng cho mọi worktree ngay vì nằm ở common-dir.
+Feature worktree không tự sync; Harness mới chỉ có hiệu lực khi CLAUDE.md/AGENTS.md trong chính worktree là bản mới (đã kiểm chứng: Claude/Codex/Cursor nạp theo cwd). Kiểm tra bằng `scripts/harness-status.sh` và `scripts/sync-harness.sh --check`. Đồng bộ bằng REBASE qua `scripts/sync-harness.sh --apply --worktree <path>` tại main, chỉ khi user yêu cầu, dừng agent đang ghi trước. Worktree có thay đổi local thì user commit/xử lý trước; không stash/rebase/merge thay user.
 
 ## Roadmap (chưa triển khai)
 

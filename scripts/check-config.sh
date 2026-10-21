@@ -33,7 +33,10 @@ hp=`git config --get core.hooksPath`.strip
 (puts "HOOKS core.hooksPath=#{hp.inspect} còn đặt; chạy scripts/install-hooks.sh";bad+=1) unless hp.empty?
 `git worktree list --porcelain`.lines.grep(/\Aworktree /).map{|l|l.sub("worktree ","").strip}.each{|w|
   hd=`git -C "#{w}" rev-parse --path-format=absolute --git-path hooks`.strip
-  %w[pre-commit pre-merge-commit].each{|h| f=File.join(hd,h)
+  %w[pre-commit pre-merge-commit commit-msg].each{|h| f=File.join(hd,h)
     (puts "HOOKFILE #{w}: thiếu guard #{h}";bad+=1) unless File.executable?(f) && File.read(f).include?("orca-manager-guard")}}
+# Worker Isolation: main không được có thay đổi lạ (dấu hiệu worker ghi thẳng vào main)
+dirty=`git status --porcelain`.lines.map(&:strip).reject{|l|l=~/\A\?\? \.serena\//}
+dirty.each{|l| puts "WARN main có thay đổi chưa commit: #{l} (nếu do worker: vi phạm Worker Isolation, báo user)"}
 puts "repos=#{r["repositories"].size} skills=#{s["skills"].size} problems=#{bad}"
 exit(bad.zero? ? 0 : 1)'

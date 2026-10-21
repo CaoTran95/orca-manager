@@ -7,9 +7,10 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/guard-test.XXXXXX"); trap 'rm -rf "$T"' EXIT
 pass=0; fail=0
 ok(){ if [ "$2" = 1 ]; then pass=$((pass+1)); echo "[PASS] $1"; else fail=$((fail+1)); echo "[FAIL] $1"; fi; }
 
-mkdir "$T/r"; git clone -q "$SRC" "$T/r/main" || exit 2
+mkdir "$T/r"; git clone -q -b main "$SRC" "$T/r/main" || exit 2
 cd "$T/r/main" || exit 2
 git config user.email t@t; git config user.name t
+git remote remove origin
 cp "$SRC"/scripts/*.sh "$SRC"/scripts/*.rb scripts/; cp "$SRC"/config/*.yaml config/
 printf "version: 2\ntasks: {}\n" > config/task-ownership.yaml
 git add -A; git commit -qm base --allow-empty; scripts/install-hooks.sh >/dev/null
