@@ -1,6 +1,6 @@
 # Task: Hermes Case 9b — tách code chiến dịch từ a4f84b2
 
-- Status: IN_PROGRESS
+- Status: REVIEW
 - Feature key: case9b-marketing-processing
 - Created: 2026-10-21
 - Updated: 2026-10-21
@@ -22,7 +22,7 @@ Nguồn commit: `a4f84b2` nằm trên `feat/bidu-cs-case9-extend` (13 file, +248
 
 | Task ID | Repo | Worktree | Worker/session | Depends on | Status | Evidence | Commit/MR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T2 | hermes-agent | case9b-marketing-processing | codex · term_322b3f65 · dispatch ctx_56847c551fe2 | none | IN_PROGRESS | dispatched 2026-10-21T03:13Z | |
+| T2 | hermes-agent | case9b-marketing-processing | codex · term_322b3f65 · dispatch ctx_56847c551fe2 | none | REVIEW | eval tier1_affiliate_campaign PASS 5/5, py_compile OK (venv của worktree case9), git sạch, 9 file +467/-4 | 4ba3777 |
 
 ## Acceptance criteria
 
@@ -44,3 +44,9 @@ Nguồn commit: `a4f84b2` nằm trên `feat/bidu-cs-case9-extend` (13 file, +248
 
 - Run: run_702ee8c55062 | Task: task_76912f16db8b | Dispatch: ctx_56847c551fe2
 - Agent: codex | Terminal: term_322b3f65-02db-41c6-a68d-12f66bf4d129 | Worktree reused (không tạo mới)
+
+## Progress
+
+- Vòng 0: worker_done succeeded, commit 4ba3777; eval chưa chạy được (thiếu venv).
+- Vòng sửa 1/2: chạy eval bằng venv sẵn có của worktree feat-bidu-cs-case9 (không sửa venv) -> PASS 5/5. Leader đã đối chiếu git log/status/diff --stat.
+- Chưa làm: push/MR; review độc lập phần xlsx/backend helper (shared); người dùng duyệt ranh giới campaign/promotion.
