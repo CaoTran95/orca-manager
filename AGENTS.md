@@ -79,3 +79,21 @@ Read the detailed workflow before a multi-repo task:
 ## Leader/worker V1
 
 Repo/base branch: config/repositories.yaml. Skill đã xác minh: config/skill-registry.yaml (chỉ mục lục, đọc skill tại worktree được giao; không tạo/sửa domain skill). Điều phối: docs/LEADER_PLAYBOOK.md. Worker nhận việc theo docs/tasks/HANDOFF_TEMPLATE.md và báo cáo kèm bằng chứng test.
+
+## Harness ownership & isolation
+
+- Chỉ worktree `main` của Orca Manager được sửa, nâng cấp, bảo trì Harness: CLAUDE.md, AGENTS.md, .claude/skills/, config/, scripts/, docs/LEADER_PLAYBOOK.md, templates và quy tắc điều phối.
+- Worktree `feat/*` chỉ được: đọc/dùng Harness; tạo và cập nhật file trạng thái của chính feature trong docs/tasks/ (không sửa template hay task của feature khác); điều phối Codex/Cursor qua Orca CLI; theo dõi, kiểm chứng, cập nhật tiến độ; đề xuất cải tiến Harness.
+- Ở `feat/*` nghiêm cấm: sửa Harness; tạo/sửa/xóa management skills; đổi config repository/skill registry; đổi script hoặc quy trình điều phối; tự sync/cherry-pick/rebase/merge Harness từ main; giao worker sửa Harness thay Leader.
+- Change request: ghi nhận vấn đề và đề xuất, báo user, chờ phê duyệt, chỉ triển khai tại main. Feature worktree không tự cập nhật Harness.
+- Enforcement: trước mọi thao tác ghi file, kiểm tra git worktree và đường dẫn đích; ở feature worktree mà file thuộc Harness thì từ chối và báo cáo. Không tự chuyển sang main để né quy tắc. Áp dụng cho Claude Leader và mọi Codex/Cursor worker.
+- Không tự chuyển branch hoặc đồng bộ từ main khi có thay đổi chưa commit. Nâng cấp Harness chỉ khi được yêu cầu rõ.
+
+## Claude Leader V1
+
+- Tạo worktree repo nghiệp vụ bắt buộc dùng `baseRef` đã xác minh trong config/repositories.yaml; không mặc định origin/develop hay origin/main. Thiếu baseRef thì dừng và hỏi user.
+- Leader chỉ tự làm điều phối nhỏ, read-only, hoặc cập nhật tài liệu task trong phạm vi được phép.
+- Phân tích code sâu, coding, debug, tách commit, cherry-pick, rebase phức tạp ở repo nghiệp vụ giao Codex/Cursor.
+- Thao tác Git có nguy cơ đổi lịch sử hoặc dữ liệu phải được kiểm tra và tuân thủ approval policy.
+- Không tự tiếp tục task nghiệp vụ cũ khi user chưa yêu cầu.
+- Khi EXECUTE, phải xác nhận dispatch worker thành công (session/task id), không chỉ viết handoff.
