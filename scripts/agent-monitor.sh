@@ -22,6 +22,7 @@ CMD_TIMEOUT = 30
 AGENT_SKIP = {"", "shell", "bash", "zsh", "fish"}
 HANDLE_RE = re.compile(r"term_[0-9a-fA-F]{8}(?:-[0-9a-fA-F]+)*")
 TASK_ID_RE = re.compile(r"(?i)^(?:T\d+[A-Za-z0-9-]*|task_[0-9a-fA-F]+)$")
+INLINE_TASK_RE = re.compile(r"(?<![\w-])(task_[0-9a-fA-F]+|T\d+[A-Za-z0-9-]*)(?![\w-])", re.I)
 STATUS_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{1,31}$")
 FEATURE_RE = re.compile(r"(?m)^- Feature key:\s*(\S+)\s*$")
 COLUMNS = ["Origin", "Agent", "Repository", "Worktree", "Feature", "Task", "Session", "Activity", "Updated"]
@@ -297,11 +298,13 @@ def load_task_files(directory):
         headers = None
         for raw in text.splitlines():
             line = raw.strip()
-            same_line_task = re.search(r"\b(task_[0-9a-fA-F]+|T\d+)\b", line)
-            if same_line_task and HANDLE_RE.search(line) and "Task" in line:
-                for token in HANDLE_RE.findall(line):
-                    links.append({"token": token, "task_id": same_line_task.group(1), "status": None, "file": name})
             if not line.startswith("|"):
+                if re.search(r"\bTask\b", line):
+                    task_ids = [item for item in INLINE_TASK_RE.findall(line) if TASK_ID_RE.fullmatch(item)]
+                    tokens = HANDLE_RE.findall(line)
+                    for token in tokens:
+                        for task_id in task_ids:
+                            links.append({"token": token, "task_id": task_id, "status": None, "file": name})
                 continue
             cells = [part.strip() for part in line.strip().strip("|").split("|")]
             if not cells or all(set(part) <= set("-: ") and part for part in cells):
@@ -626,10 +629,6 @@ def build_rows(snapshot):
                     task_id = worker_task_id(worker)
                     if task_id:
                         tasks.append((task_id, task_status.get(task_id)))
-                if pane is not None and not tasks:
-                    title = first(pane, "taskTitle", "task_title")
-                    if isinstance(title, str) and title.strip():
-                        tasks.append((f"title:{title.strip()}", None))
                 add_row(
                     origin=origin,
                     agent=agent,
@@ -678,10 +677,6 @@ def build_rows(snapshot):
             if isinstance(pane.get("state"), str) and pane.get("state"):
                 activity.insert(0, f"pane:{pane['state']}")
             times.append(first(pane, "updatedAt", "updated_at"))
-            if not tasks:
-                title = first(pane, "taskTitle", "task_title")
-                if isinstance(title, str) and title.strip():
-                    tasks.append((f"title:{title.strip()}", None))
         add_row(
             origin="orchestration",
             agent=agent,
@@ -883,7 +878,7 @@ def self_test():
                 "agents": [
                     {"agentType": "claude", "state": "working", "updatedAt": 1792552592832},
                     {"agentType": "claude", "state": "done", "updatedAt": 1792552592832},
-                    {"agentType": "cursor", "state": "done", "updatedAt": 1792552590000, "taskTitle": ""},
+                    {"agentType": "cursor", "state": "done", "updatedAt": 1792552590000, "taskTitle": "T2 Hermes: tách code"},
                 ],
             },
             {
@@ -957,6 +952,7 @@ def self_test():
     check("ambiguous-warning", any("không gán activity" in item and "/wt/ai" in item for item in warnings))
     cursor = by_session["term_33333333-3333-3333-3333-333333333333"]
     check("unique-pane", cursor["Activity"] == "pane:done" and cursor["Origin"] == "manual" and cursor["Task"] == "-")
+    check("ignore-pane-title", "T2 Hermes" not in cursor["Task"] and not cursor["Task"].startswith("title:"))
     check("cursor-feature", cursor["Feature"] == "translate-ai")
     worker_row = by_session[handle]
     check("origin", worker_row["Origin"] == "orchestration")
@@ -991,6 +987,10 @@ def self_test():
     })
     check("orphan-worker", len(orphan[0]) == 1 and orphan[0][0]["Origin"] == "orchestration" and orphan[0][0]["Task"] == "task_orphan" and orphan[0][0]["Repository"] == "bidu-hermes-agent")
     check("orphan-no-fake-done", orphan[0][0]["Activity"] == "worker:running")
+    short_ids = [item for item in INLINE_TASK_RE.findall("Task: T2-review | Terminal: term_322b3f65-02db-41c6-a68d-12f66bf4d129") if TASK_ID_RE.fullmatch(item)]
+    check("no-short-task-id", short_ids == ["T2-review"])
+    full_ids = [item for item in INLINE_TASK_RE.findall("Task: task_76912f16db8b Terminal: term_abc") if TASK_ID_RE.fullmatch(item)]
+    check("inline-task-id", full_ids == ["task_76912f16db8b"])
     if failures:
         print("self-test failed: " + ", ".join(failures))
         return 1
