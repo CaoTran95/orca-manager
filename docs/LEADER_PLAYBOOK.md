@@ -105,7 +105,7 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 `scripts/check-config.sh` (read-only): YAML hợp lệ, trường baseRef/status của từng repo, mọi repo resolve qua Orca, mọi skill path tồn tại, không còn rule lỗi thời (mặc định develop/main), hooks guard đã bật. Chạy sau khi sửa Harness.
 `scripts/guard-harness.sh` (read-only): ở feature worktree báo file Harness bị sửa/commit trái phép; chạy qua hook và ở bước Verify (hook không chặn được bypass cố ý). `scripts/harness-status.sh`: hook/guard/độ lệch Harness từng worktree. `scripts/test-guard.sh`: kiểm thử guard trên clone tạm (chạy sau khi sửa guard). Cài hook: `scripts/install-hooks.sh` tại main.
 
-Feature lớn nhiều task con: file mới khai báo `owns:` trong front matter của file chính (`---\nowns:\n  - docs/tasks/<ngày>-<tên>.md\n---`); file đã có trong main hoặc quyền chéo do main duyệt trong `config/task-ownership.yaml`. Leader ở feature worktree chỉ khai báo `owns:` trong file chính của mình, không tự sửa registry.
+Feature lớn nhiều task con: file mới khai báo `owns:` trong front matter của file chính (`---\nowns:\n  - docs/tasks/<ngày>-<tên>.md\n---`); file đã có trong main hoặc quyền chéo do main duyệt trong `config/task-ownership.yaml` (mỗi task một owner). Guard từ chối khai báo `owns:` trùng claim của feature/registry khác; kiểm tra bằng `scripts/ownership.rb conflicts`. Leader ở feature worktree chỉ khai báo `owns:` trong file chính của mình, không tự sửa registry.
 
 ## Đồng bộ Harness sang feature worktree
 

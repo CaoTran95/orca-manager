@@ -74,3 +74,12 @@ Chưa chạy: giao worker thật (không có feature để giao; tránh khởi c
 - Phát hiện: 2 feature worktree hiện có (content-translation-ai, orca-manager-task-workflow) đã commit task record con/chéo -> guard v1 báo vi phạm; grandfather vào `config/task-ownership.yaml`, cần user rà soát.
 - Mới: `scripts/test-guard.sh` (25 ca trên clone tạm), `scripts/harness-status.sh`.
 - Chưa kiểm chứng: Claude/Codex/Cursor thực sự nạp instruction nào khi mở trong feature worktree (suy ra từ cơ chế cwd, chưa chạy thử); Orca có tạo worktree bằng cách khác bỏ qua common-dir hooks hay không.
+
+## Update 2026-10-21 — Ownership v2, xung đột claim, nguồn instruction (mode SETUP, main)
+
+- `config/task-ownership.yaml` v2: mỗi task một `owner` + `owner_status` (proposed/confirmed) + `grandfathered`. Quyền hiệu lực giữ nguyên so với v1 (không xóa quyền, không sửa task record nào).
+- Đề xuất owner (chờ user xác nhận, đều đang `proposed`): `case9-expanded`, `case9b-input-change`, `case9b-marketing-processing`, `orca-manager-task-workflow` -> owner `orca-manager-task-workflow`; `content-translation-ai` chỉ còn grandfathered cho `case9-expanded` và `orca-manager-task-workflow`. Bằng chứng: chỉ branch orca-manager-task-workflow có commit 6b1e988 (tách case9b) và 2 file case9b; bản case9-expanded ở content-translation-ai là bản trước khi tách.
+- Phát hiện xung đột: `scripts/ownership.rb conflicts` (đọc `owns:` ở tip mọi branch feat/* và working copy mọi worktree + registry); guard từ chối `owns:` trùng/xung đột và naming lấn key dài hơn.
+- Guard đọc thay đổi ròng so với điểm tách main (gồm nội dung từ commit merge); path có nội dung trùng một phiên bản từng có trên main thì hợp lệ.
+- Nguồn commit 3e7d783 (reflog + trailer): Cursor worker (agent-monitor TUI) commit trực tiếp trên main lúc 11:13:46 để khôi phục `.githooks/` mà commit 38513a7 của chính Cursor lúc 11:13:07 đã xóa. Cùng git user, không reset/revert. Ghi nhận: worker đang ghi thẳng vào checkout main (trái ghi chú trong config/repositories.yaml).
+- Probe instruction (read-only, hỏi trong cwd `feat-content-translation-ai`, không tool): Claude nạp CLAUDE.md của worktree (bản cũ, "fallback origin/main"), KHÔNG nạp AGENTS.md; Codex nạp AGENTS.md worktree (bản cũ); Cursor nạp .cursor rule + CLAUDE.md + AGENTS.md worktree (bản cũ). Không agent nào nạp Harness mới từ main.

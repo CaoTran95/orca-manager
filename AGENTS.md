@@ -12,13 +12,14 @@ Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.claude/skills/`, `config/`, `s
 - Worktree `feat/*` của Orca Manager chỉ được tạo/sửa task record được phân quyền (guard kiểm tra, không chỉ dựa vào tên file):
   1. `docs/tasks/YYYY-MM-DD-<feature-key>[-suffix].md` (khớp `feat/<feature-key>`; `/` trong tên branch -> `-`);
   2. feature lớn nhiều task con: file MỚI khai báo trong front matter `owns:` (danh sách path docs/tasks/, không glob) của file chính `YYYY-MM-DD-<feature-key>.md`;
-  3. file docs/tasks/ ĐÃ có trong main hoặc quyền chéo: chỉ khi main duyệt trong `config/task-ownership.yaml`.
+  3. file docs/tasks/ ĐÃ có trong main hoặc quyền chéo: chỉ khi main duyệt trong `config/task-ownership.yaml` (mỗi task một `owner` chính; `grandfathered` chỉ để giữ quyền đã có; `owner_status: proposed` = chờ user xác nhận).
+  Hai feature không được cùng claim một task: `owns:` trùng nhau, trùng owner của registry, hoặc lấn file chính của feature có key dài hơn (`a` vs `a-b`) đều bị guard từ chối (`scripts/ownership.rb conflicts`).
   Không bao giờ ghi được README/TEMPLATE/HANDOFF_TEMPLATE, symlink, hay file ngoài docs/tasks/.
 - Ở `feat/*` cấm: sửa Harness; tạo/sửa/xóa management skill; đổi config; đổi script/quy trình; tự sync/cherry-pick/rebase/merge từ main; giao worker sửa Harness; tự chuyển sang main để né quy tắc.
 - Phát hiện Harness lỗi: ghi Change Request (đề xuất + bằng chứng) vào task file của feature, báo user, chờ xử lý tại main.
 - Không tự chuyển branch/đồng bộ khi có thay đổi chưa commit. Nâng cấp Harness chỉ khi user yêu cầu rõ.
 - Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` kiểm tra working tree, file staged và commit của branch (so với main); nội dung trùng khít main (đồng bộ do user duyệt) không bị coi là sai lệch. Chạy tự động qua hook `pre-commit` và `pre-merge-commit`, được cài bằng `scripts/install-hooks.sh` (tại main) vào `<git-common-dir>/hooks` dùng chung mọi worktree, tự tìm main lúc chạy nên không phụ thuộc path và không dùng `core.hooksPath` (path tuyệt đối sẽ im lặng mất hiệu lực khi di chuyển repo). Hook không chặn được bypass cố ý, nên Leader chạy `scripts/guard-harness.sh` ở bước Verify; `scripts/harness-status.sh` liệt kê hook/guard/độ lệch Harness của mọi worktree; `scripts/test-guard.sh` là bộ kiểm thử guard.
-- Instruction của agent nạp theo cwd của worktree: Harness mới chỉ có hiệu lực ở worktree khi file CLAUDE.md/AGENTS.md TRONG worktree đó đã là bản mới. Đọc đường dẫn của main không đồng nghĩa agent đã áp dụng; kiểm tra bằng `scripts/harness-status.sh`.
+- Instruction nạp theo cwd (đã kiểm chứng bằng probe 2026-10-21): Claude chỉ nạp CLAUDE.md của worktree (AGENTS.md chỉ được tham chiếu, chưa nạp) cộng `~/.claude` và memory index của project Orca Manager (dùng chung mọi worktree); Codex nạp AGENTS.md của worktree; Cursor nạp `.cursor/rules`, CLAUDE.md và AGENTS.md của worktree. Không agent nào tự đọc Harness ở main: Harness mới chỉ có hiệu lực khi các file đó TRONG worktree là bản mới. Kiểm tra bằng `scripts/harness-status.sh`; đường dẫn tồn tại không có nghĩa là đã áp dụng.
 - Trước mọi thao tác ghi, kiểm tra git worktree và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
 ## 2. Execution modes
 
@@ -81,4 +82,5 @@ scripts/check-config.sh          # YAML, repo, skill path, policy, guard
 scripts/guard-harness.sh         # kiểm tra thay đổi Harness trái phép
 scripts/harness-status.sh        # hook/guard/độ lệch Harness của từng worktree (read-only)
 scripts/test-guard.sh            # kiểm thử guard trên clone tạm
+scripts/ownership.rb conflicts   # xung đột claim task record giữa các feature
 ~~~

@@ -23,12 +23,11 @@ s["skills"].each{|k|
   x=ids[k["repo"]] or (puts "UNKNOWN repo #{k["repo"]}";bad+=1;next)
   base=paths[x["name"]] or next
   ([k["path"]]+(k["also_at"]||[])).each{|p| (puts "MISSING #{k["repo"]}:#{p}";bad+=1) unless File.exist?(File.join(base,p))}}
-# Ownership registry
-o=L.("config/task-ownership.yaml")
-(o["features"]||{}).each{|k,v|
-  (puts "OWNERS #{k}: phải là mảng";bad+=1;next) unless v.is_a?(Array)
-  v.each{|f| ok=(f=~%r{\Adocs/tasks/\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+\.md\z}) && !(f=~%r{/(README|TEMPLATE|HANDOFF_TEMPLATE)\.md\z})
-    (puts "OWNERS #{k}: path không hợp lệ #{f}";bad+=1) unless ok}}
+# Ownership registry + xung đột claim giữa các feature (ownership.rb)
+vo=`ruby scripts/ownership.rb validate 2>&1`; puts vo unless vo.empty?
+bad+=vo.lines.count{|l|l.start_with?("OWNERS")}
+co=`ruby scripts/ownership.rb conflicts 2>&1`
+co.lines.each{|l| puts "OWNERSHIP "+l.strip; bad+=1 if l.start_with?("ERROR")}
 # Guard hooks: không dùng core.hooksPath (path tuyệt đối sẽ mất hiệu lực khi di chuyển repo); stub nằm ở common-dir/hooks.
 hp=`git config --get core.hooksPath`.strip
 (puts "HOOKS core.hooksPath=#{hp.inspect} còn đặt; chạy scripts/install-hooks.sh";bad+=1) unless hp.empty?

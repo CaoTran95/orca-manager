@@ -10,7 +10,8 @@ ok(){ if [ "$2" = 1 ]; then pass=$((pass+1)); echo "[PASS] $1"; else fail=$((fai
 mkdir "$T/r"; git clone -q "$SRC" "$T/r/main" || exit 2
 cd "$T/r/main" || exit 2
 git config user.email t@t; git config user.name t
-cp "$SRC"/scripts/*.sh scripts/; cp "$SRC"/config/*.yaml config/
+cp "$SRC"/scripts/*.sh "$SRC"/scripts/*.rb scripts/; cp "$SRC"/config/*.yaml config/
+printf "version: 2\ntasks: {}\n" > config/task-ownership.yaml
 git add -A; git commit -qm base --allow-empty; scripts/install-hooks.sh >/dev/null
 echo y > docs/tasks/2026-10-22-existing.md; git add -A; git commit -qm existing
 git worktree add -q ../feat-big -b feat/big; cd ../feat-big; git config user.email t@t
@@ -40,7 +41,7 @@ git reset -q .serena/m; rm -rf .serena
 t "ALLOW clean tree after allowed commit" 0
 
 # Duyệt quyền bổ sung ở main (file đã có trong main)
-(cd "$T/r/main"; printf 'version: 1\nfeatures:\n  big:\n    - docs/tasks/2026-10-22-existing.md\n' > config/task-ownership.yaml; git add -A; git commit -qm approve)
+(cd "$T/r/main"; printf 'version: 2\ntasks:\n  docs/tasks/2026-10-22-existing.md:\n    owner: big\n    owner_status: confirmed\n' > config/task-ownership.yaml; git add -A; git commit -qm approve)
 echo z >> docs/tasks/2026-10-22-existing.md; t "ALLOW existing file approved in main config/task-ownership.yaml" 0; git checkout -q -- docs/tasks/2026-10-22-existing.md
 
 # Commit trái phép khi hook bị vô hiệu (chỉ trong clone tạm) vẫn bị guard phát hiện
@@ -59,6 +60,36 @@ git merge --abort 2>/dev/null; git reset -q --hard HEAD
 git checkout -q -b feat/grp/sub main; echo x > docs/tasks/2026-10-22-grp-sub.md
 t "ALLOW branch feat/grp/sub maps to key grp-sub" 0; rm docs/tasks/2026-10-22-grp-sub.md; git checkout -q feat/big
 git checkout -q --detach; echo x > docs/tasks/2026-10-22-big-x.md; t "DENY any write on detached HEAD" 1; rm docs/tasks/2026-10-22-big-x.md; git checkout -q feat/big
+
+# --- Xung đột ownership giữa nhiều feature ---
+cd "$T/r/main"; git worktree add -q ../feat-other -b feat/other; cd ../feat-other; git config user.email t@t
+printf -- '---\nowns:\n  - docs/tasks/2026-10-22-sub-alpha.md\n---\n' > docs/tasks/2026-10-22-other.md
+t "DENY owns: sub-alpha also owned by feat/big (committed claim) — other side" 1
+"$T/r/main/scripts/ownership.rb" conflicts >/dev/null 2>&1; [ $? = 1 ] && ok "ownership.rb conflicts reports ERROR (exit 1)" 1 || ok "ownership.rb conflicts exit 1" 0
+cd ../feat-big; t "DENY feat/big too once both claim the same file (symmetric)" 1
+cd ../feat-other; rm docs/tasks/2026-10-22-other.md
+printf -- '---\nowns:\n  - docs/tasks/2026-10-22-existing.md\n---\n' > docs/tasks/2026-10-22-other.md
+t "DENY owns: a file whose registry owner is another feature" 1
+rm docs/tasks/2026-10-22-other.md
+cd "$T/r/main"; git worktree add -q ../feat-big-api -b feat/big-api; cd ../feat-big-api; git config user.email t@t
+echo x > docs/tasks/2026-10-22-big-api.md; t "ALLOW primary of longest key big-api" 0
+cd ../feat-big; echo x > docs/tasks/2026-10-22-big-api.md; t "DENY feat/big taking primary of feat/big-api by suffix naming" 1; rm docs/tasks/2026-10-22-big-api.md
+cd ../feat-other; git checkout -q -- . 2>/dev/null; cd ../feat-big
+"$T/r/main/scripts/ownership.rb" validate >/dev/null 2>&1; [ $? = 0 ] && ok "ownership.rb validate accepts registry" 1 || ok "validate" 0
+
+# --- Merge commit mang Harness khác main, tạo khi hook bị vô hiệu (chỉ clone tạm) ---
+git checkout -q -b feat/mergecase main; echo a > docs/tasks/2026-10-22-mergecase.md; git add -A; git commit -qm mc
+git config core.hooksPath /nonexistent
+git checkout -q -b side main; echo side > docs/tasks/2026-10-22-mergecase-side.md; git add -A; git commit -qm side; git checkout -q feat/mergecase
+git merge -q --no-commit --no-ff side >/dev/null 2>&1; [ -f .git ] || true; git rev-parse -q --verify MERGE_HEAD >/dev/null && ok "(setup) merge in progress" 1 || ok "(setup) merge in progress" 0; echo evil >> AGENTS.md; git add -A; git commit -qm "evil merge" >/dev/null 2>&1
+git config --unset core.hooksPath
+t "DENY merge commit carrying Harness content not from main (committed, hook bypassed)" 1
+git reset -q --hard HEAD~1
+# main tiến lên sau khi đồng bộ: nội dung cũ của main vẫn hợp lệ; main xóa file thì xóa ở feature cũng hợp lệ
+git merge -q --no-edit main >/dev/null 2>&1
+(cd "$T/r/main"; echo more >> AGENTS.md; git rm -q config/new.yaml 2>/dev/null; git commit -qam "main moves on" >/dev/null 2>&1)
+t "ALLOW tree synced from older main after main advanced" 0
+git checkout -q feat/big
 
 # Di chuyển repo: stub trong common-dir/hooks không phụ thuộc path; core.hooksPath tuyệt đối thì mất hiệu lực
 cd "$T"; mv r r2
