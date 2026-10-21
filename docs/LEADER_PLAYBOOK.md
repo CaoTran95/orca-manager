@@ -25,7 +25,7 @@ Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-c
 ## Quy trình một feature
 
 1. **Intake**: ghi yêu cầu, acceptance criteria, repo bị ảnh hưởng vào task file (từ TEMPLATE.md). Chia task theo repo, đánh dấu dependency và task chạy song song.
-2. **Chuẩn bị worktree** (theo AGENTS.md mục 3): đọc `baseRef` + `status` của từng repo trong `config/repositories.yaml` (không mặc định develop/main; thiếu hoặc chưa `verified` => hỏi user trước). Kiểm tra repo, remote, branch, path, `git status`, `orca worktree list --json`; ưu tiên tái sử dụng worktree của `feat/<feature-key>`; chỉ tạo mới khi chưa có: `git fetch origin <branch của baseRef>` rồi
+2. **Chuẩn bị worktree** (theo AGENTS.md mục 3; có thể dùng `scripts/new-task.sh <key> --repo <id>` rồi thêm `--apply`): đọc `baseRef` + `status` của từng repo trong `config/repositories.yaml` (không mặc định develop/main; thiếu hoặc chưa `verified` => hỏi user trước). Kiểm tra repo, remote, branch, path, `git status`, `orca worktree list --json`; ưu tiên tái sử dụng worktree của `feat/<feature-key>`; chỉ tạo mới khi chưa có: `git fetch origin <branch của baseRef>` rồi
    `orca worktree create --repo <selector> --name <feature-key> --base-branch <baseRef> --no-parent --setup inherit --json`
    Ghi repo/baseRef/branch/path/status vào bảng worktree **trước khi** giao code.
 3. **Chọn worker**: theo độ phức tạp, agent đang sẵn sàng/phiên có thể tiếp tục (`orca terminal list --json`), chi phí. Không gán cứng agent theo công nghệ. Một worktree chỉ một worker ghi tại một thời điểm.

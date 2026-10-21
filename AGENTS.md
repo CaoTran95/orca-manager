@@ -55,6 +55,8 @@ Trước khi triển khai feature mới:
 6. Cùng một branch `feat/<feature-key>` ở mọi repo liên quan; display name `<feature-key> · <repo-short-name>`; không chứa username/timestamp/máy.
 7. Xác minh path và branch của từng worktree, ghi bảng (repo, baseRef, branch, path, status) vào task file **trước khi** giao code.
 
+Có thể làm các bước 1-7 bằng `scripts/new-task.sh <feature-key> --repo <id> [--repo <id>...]` (mặc định chỉ in kế hoạch; `--apply` mới tạo worktree orca-manager + repo nghiệp vụ và task record từ TEMPLATE, rồi commit task record). Script chỉ dùng baseRef trong config, tái sử dụng worktree có sẵn, dừng ở repo `needs-confirmation` (cần user xác nhận rồi `--confirm-base <id>`), không dispatch worker.
+
 ## 4. Safety
 
 - Không reset, force-checkout, xóa/remove worktree hoặc ghi đè thay đổi chưa commit, file untracked, commit, worktree có sẵn khi chưa có approval rõ.
@@ -93,4 +95,6 @@ scripts/guard-harness.sh         # kiểm tra thay đổi Harness trái phép
 scripts/harness-status.sh        # hook/guard/độ lệch Harness của từng worktree (read-only)
 scripts/test-guard.sh            # kiểm thử guard trên clone tạm
 scripts/ownership.rb conflicts   # xung đột claim task record giữa các feature
+scripts/new-task.sh <key> --repo <id>   # kế hoạch tạo task + worktree (--apply để tạo)
+scripts/test-new-task.sh         # kiểm thử new-task.sh với Orca giả
 ~~~
