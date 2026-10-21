@@ -10,6 +10,7 @@ Claude Code là Leader (phân tích, giao việc, kiểm chứng, báo cáo). Co
 | Skill nào ở repo nào | `config/skill-registry.yaml` (chỉ là mục lục) |
 | Trạng thái feature/task | `docs/tasks/YYYY-MM-DD-<feature-key>.md` |
 | Worktree/terminal/agent thực tế | `orca worktree list/ps --json`, `orca terminal list --json` |
+| Agent gần thời gian thực | `scripts/agent-monitor.sh --once` hoặc `--watch 5` |
 | Cách dùng orchestration | `orca skills get orchestration`, `orca skills get orca-cli` |
 
 Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-cli`); không tạo skill quản trị trùng lặp. Domain skill thuộc repo nghiệp vụ: không tạo/sửa/sao chép.
@@ -26,7 +27,7 @@ Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-c
    - Giao có giám sát: `orca orchestration run-create --objective "<feature>" --json`, rồi `orca orchestration worker-start --spec "<handoff>" --worktree path:<path> --agent <codex|cursor|claude> --json`; chờ bằng `orca orchestration check --wait --types worker_done,escalation,question --json`.
    - Giao đơn giản/không giám sát: dùng `orca-cli` (terminal tới phiên có sẵn bằng `orca terminal send`).
    Không khởi chạy trùng: kiểm tra `orca worktree ps --json` và `orca orchestration worker-list` trước.
-6. **Theo dõi theo checkpoint** (không đọc log liên tục): khi có `worker_done`/escalation, hoặc khi người dùng yêu cầu. Đọc kết quả giới hạn: `orca orchestration worker-read` / `orca terminal read` với giới hạn nhỏ. Timeout/empty không phải thất bại; không stop/retry khi chưa có bằng chứng tiến trình đã thoát.
+6. **Theo dõi theo checkpoint** (không đọc log liên tục): khi có `worker_done`/escalation, hoặc khi người dùng yêu cầu. Trạng thái agent lấy bằng `scripts/agent-monitor.sh` (một lần hoặc `--watch 5`), không đọc log và không gọi AI cho mỗi lần refresh. Đọc kết quả giới hạn: `orca orchestration worker-read` / `orca terminal read` với giới hạn nhỏ. Timeout/empty không phải thất bại; không stop/retry khi chưa có bằng chứng tiến trình đã thoát.
 7. **Verify**: xem bên dưới. Chưa đạt -> gửi chỉnh sửa cụ thể (`orchestration send`/`terminal send`) thay vì tự sửa.
 8. **Approve & báo cáo**: cập nhật task file, tổng hợp tiến độ/test/blocker/quyết định cần người dùng duyệt.
 
@@ -51,8 +52,19 @@ Kiểm tra tối thiểu, ưu tiên rẻ trước:
 ## Khởi động lại / resume
 
 1. Đọc task file của feature (`docs/tasks/`), bảng worktree và task table.
-2. Đối chiếu thực tế: `orca worktree list --json` (path/branch còn tồn tại?), `git status` từng worktree, `orca terminal list --json` / `orca orchestration worker-list` (worker còn sống? session id).
+2. Đối chiếu thực tế: `scripts/agent-monitor.sh --once`, hoặc trực tiếp `orca worktree list --json` (path/branch còn tồn tại?), `git status` từng worktree, `orca terminal list --json` / `orca orchestration worker-list` (worker còn sống? session id).
 3. Chỉ phân tích lại phần lệch trạng thái; ghi chênh lệch vào task file rồi tiếp tục.
+
+## Theo dõi agent trong Terminal
+
+`scripts/agent-monitor.sh` chỉ đọc. Không tạo/dừng agent, không sửa worktree và không đổi task.
+
+```bash
+scripts/agent-monitor.sh --once
+scripts/agent-monitor.sh --watch 5
+```
+
+Mỗi snapshot gộp `orca orchestration run-list` và `worker-list` (mọi Run, theo `nextCursor`), `task-list --run`, `orca terminal list`, `orca worktree ps` / `worktree list`, và liên kết tường minh trong `docs/tasks/`. Cột `Origin`: `orchestration` khi session có trong worker-list; `manual` khi agent được mở ngoài record đó. `Task`, `Activity` và `Updated` chỉ điền khi nguồn ghi rõ; ô thiếu là `-`. Nhiều pane cùng loại trong một worktree không được ghép vào một terminal nếu không có khóa chung. Trang bị cắt, host không phủ, hoặc lệnh lỗi được in ở `# warnings` thay vì suy ra là không có agent.
 
 ## Giới hạn Leader
 
@@ -66,7 +78,7 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 
 ## Tối ưu token
 
-- Thu thập trạng thái bằng script/CLI, không dùng AI: `scripts/orca-status.sh [feature-key]`, `scripts/check-config.sh`, `git status/diff --stat`.
+- Thu thập trạng thái bằng script/CLI, không dùng AI: `scripts/agent-monitor.sh --once`, `scripts/orca-status.sh [feature-key]`, `scripts/check-config.sh`, `git status/diff --stat`.
 - Chỉ đọc phần cần cho quyết định hiện tại; worker đọc source và skill. Báo cáo worker <= 15 dòng; log dài lưu file và truyền path.
 - Tiếp tục phiên worker đang sống (`orca terminal list`) thay vì khởi động lại; không phân tích lại feature khi task file còn hợp lệ.
 - Không bỏ test/review để tiết kiệm token.
