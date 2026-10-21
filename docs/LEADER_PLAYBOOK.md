@@ -1,6 +1,6 @@
 # Orca Manager V1 — Leader playbook
 
-Quy tắc ràng buộc nằm ở `AGENTS.md` (nguồn duy nhất); playbook này mô tả cách vận hành. Không xây thêm server/DB/dashboard.
+Quy tắc ràng buộc nằm ở `AGENTS.md` (nguồn duy nhất); playbook này mô tả cách vận hành. Không xây thêm server, DB hay web app.
 
 ## Vai trò và mode
 
@@ -65,14 +65,23 @@ Kiểm tra tối thiểu, ưu tiên rẻ trước:
 
 ## Theo dõi agent trong Terminal
 
-`scripts/agent-monitor.sh` chỉ đọc. Không tạo/dừng agent, không sửa worktree và không đổi task.
+`scripts/agent-monitor.sh` là dashboard read-only trong Terminal. Không tạo server, không gọi AI mỗi lần refresh, không tạo/dừng agent, không sửa worktree và không đổi task.
 
 ```bash
+scripts/agent-monitor.sh
 scripts/agent-monitor.sh --once
 scripts/agent-monitor.sh --watch 5
+scripts/agent-monitor.sh --all
+scripts/agent-monitor.sh --feature <feature-key>
+scripts/agent-monitor.sh --detail
+scripts/agent-monitor.sh --json
 ```
 
-Mỗi snapshot gộp `orca orchestration run-list` và `worker-list` (mọi Run, theo `nextCursor`), `task-list --run`, `orca terminal list`, `orca worktree ps` / `worktree list`, và liên kết tường minh trong `docs/tasks/`. Cột `Origin`: `orchestration` khi session có trong worker-list; `manual` khi agent được mở ngoài record đó. `Task`, `Activity` và `Updated` chỉ điền khi nguồn ghi rõ; ô thiếu là `-`. Nhiều pane cùng loại trong một worktree không được ghép vào một terminal nếu không có khóa chung. Trang bị cắt, host không phủ, hoặc lệnh lỗi được in ở `# warnings` thay vì suy ra là không có agent.
+Không truyền chế độ thì dashboard tự cập nhật mỗi 5 giây và vẽ lại cùng một khung, không in chồng bảng. Mặc định chỉ hiện session đang hoạt động hoặc cần chú ý. `--all` thêm session đã hoàn thành. `--detail` mới hiện session id. `--json` xuất một object có `summary`, `orchestration` và `manual`.
+
+Summary đếm Sessions, Working, Waiting/Blocked, Completed, Interrupted/Unknown. `agent`, `worker`, `task` và `term` là bốn trạng thái riêng. Terminal còn kết nối không được tính là agent đang chạy. Thiếu dữ liệu thì trạng thái là `UNKNOWN`, không ghi `IDLE` hay `DONE`.
+
+Mỗi lần refresh gọi `worktree ps`, `terminal list`, `run-list` và `worker-list` một vòng. Khi `worker-list` đã phủ mọi Run thì không gọi lại theo từng Run. `task-list` chỉ gọi cho Run có worker. `worktree list` và `repo list` chỉ gọi khi `worktree ps` không đủ để gắn repo.
 
 ## Giới hạn Leader
 

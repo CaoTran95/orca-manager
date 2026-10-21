@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Read-only: tổng hợp agent Claude/Codex/Cursor từ Orca CLI và task file.
+# Read-only: dashboard agent Claude/Codex/Cursor từ Orca CLI và task file.
 # Không tạo/dừng agent, không sửa worktree, không đổi task, không gọi AI.
 # Dùng:
+#   scripts/agent-monitor.sh
 #   scripts/agent-monitor.sh --once
 #   scripts/agent-monitor.sh --watch 5
+#   scripts/agent-monitor.sh --all --feature KEY --detail --json
 #   scripts/agent-monitor.sh --self-test
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,33 +27,91 @@ TASK_ID_RE = re.compile(r"(?i)^(?:T\d+[A-Za-z0-9-]*|task_[0-9a-fA-F]+)$")
 INLINE_TASK_RE = re.compile(r"(?<![\w-])(task_[0-9a-fA-F]+|T\d+[A-Za-z0-9-]*)(?![\w-])", re.I)
 STATUS_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{1,31}$")
 FEATURE_RE = re.compile(r"(?m)^- Feature key:\s*(\S+)\s*$")
-COLUMNS = ["Origin", "Agent", "Repository", "Worktree", "Feature", "Task", "Session", "Activity", "Updated"]
+CLI_CALLS = 0
+BUCKET_ORDER = {"WORKING": 0, "WAITING": 1, "INTERRUPTED": 2, "UNKNOWN": 3, "COMPLETED": 4}
+ATTENTION = {"WORKING", "WAITING", "INTERRUPTED", "UNKNOWN"}
+WORKING_TOKENS = {"working", "running"}
+WAITING_TOKENS = {"waiting", "blocked", "stalled", "queued"}
+COMPLETED_TOKENS = {"done", "succeeded", "completed", "complete", "success"}
 
 def die(msg, code=2):
     print(msg, file=sys.stderr)
     raise SystemExit(code)
 
 def usage():
-    die(
-        "Dùng: scripts/agent-monitor.sh --once | --watch <giây> | --self-test\n"
-        "Chỉ đọc trạng thái. Không tạo/dừng agent, không sửa worktree hay task.",
-        2,
+    print(
+        "scripts/agent-monitor.sh — dashboard read-only trong Terminal\n"
+        "\n"
+        "  scripts/agent-monitor.sh                 cập nhật dashboard mỗi 5 giây\n"
+        "  scripts/agent-monitor.sh --once          một khung hình\n"
+        "  scripts/agent-monitor.sh --watch 5       cập nhật mỗi 5 giây\n"
+        "  scripts/agent-monitor.sh --all           cả session đã hoàn thành\n"
+        "  scripts/agent-monitor.sh --feature KEY   lọc đúng feature key\n"
+        "  scripts/agent-monitor.sh --detail        hiện session id\n"
+        "  scripts/agent-monitor.sh --json          dữ liệu có cấu trúc\n"
+        "  scripts/agent-monitor.sh --self-test\n"
+        "\n"
+        "Mặc định chỉ hiện session đang hoạt động hoặc cần chú ý.\n"
+        "Chỉ đọc trạng thái. Không tạo/dừng agent, không sửa worktree hay task."
     )
 
 def parse_args(argv):
-    if argv == ["--once"]:
-        return "once", None
-    if argv == ["--self-test"]:
-        return "self-test", None
-    if len(argv) == 2 and argv[0] == "--watch":
-        try:
-            seconds = int(argv[1])
-        except ValueError:
-            die("--watch cần số giây nguyên dương, ví dụ --watch 5", 2)
-        if seconds <= 0:
-            die("--watch cần số giây nguyên dương, ví dụ --watch 5", 2)
-        return "watch", seconds
-    usage()
+    opts = {
+        "mode": None,
+        "seconds": 5,
+        "all": False,
+        "feature": None,
+        "json": False,
+        "detail": False,
+        "self_test": False,
+    }
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in ("-h", "--help"):
+            usage()
+            raise SystemExit(0)
+        if arg == "--once":
+            if opts["mode"] == "watch":
+                die("Chỉ chọn một: --once hoặc --watch.", 2)
+            opts["mode"] = "once"
+        elif arg == "--watch":
+            if opts["mode"] == "once":
+                die("Chỉ chọn một: --once hoặc --watch.", 2)
+            index += 1
+            if index >= len(argv):
+                die("--watch cần số giây nguyên dương, ví dụ --watch 5", 2)
+            try:
+                seconds = int(argv[index])
+            except ValueError:
+                die("--watch cần số giây nguyên dương, ví dụ --watch 5", 2)
+            if seconds <= 0:
+                die("--watch cần số giây nguyên dương, ví dụ --watch 5", 2)
+            opts["mode"] = "watch"
+            opts["seconds"] = seconds
+        elif arg == "--all":
+            opts["all"] = True
+        elif arg == "--detail":
+            opts["detail"] = True
+        elif arg == "--json":
+            opts["json"] = True
+        elif arg == "--self-test":
+            opts["self_test"] = True
+        elif arg == "--feature":
+            index += 1
+            if index >= len(argv) or not argv[index].strip():
+                die("--feature cần một feature key.", 2)
+            opts["feature"] = argv[index].strip()
+        elif arg.startswith("--feature=") and arg.split("=", 1)[1].strip():
+            opts["feature"] = arg.split("=", 1)[1].strip()
+        else:
+            die(f"Không hiểu đối số: {arg}\nChạy scripts/agent-monitor.sh --help", 2)
+        index += 1
+    if opts["self_test"]:
+        return opts
+    if opts["mode"] is None:
+        opts["mode"] = "once" if opts["json"] else "watch"
+    return opts
 
 def cell(value):
     if value is None:
@@ -173,6 +233,8 @@ def page_info(result):
     return None, False, total
 
 def orca_json(args):
+    global CLI_CALLS
+    CLI_CALLS += 1
     try:
         proc = subprocess.run(
             ["orca", *args, "--json"],
@@ -226,6 +288,7 @@ def collect_pages(fetch):
 
 def fetch_named(args, names, hints, limit):
     warnings = []
+    meta = {"scope": None, "complete": True}
 
     def fetch(cursor):
         cmd = [*args, "--limit", str(limit)]
@@ -233,18 +296,41 @@ def fetch_named(args, names, hints, limit):
             cmd.extend(["--cursor", cursor])
         data, err = orca_json(cmd)
         if err:
+            meta["complete"] = False
             return [], None, False, err
         result = data.get("result")
+        result_dict = result if isinstance(result, dict) else {}
+        scope = result_dict.get("scope")
+        if isinstance(scope, dict) and isinstance(scope.get("source"), str):
+            meta["scope"] = scope.get("source")
         got, note = find_rows(result, names, hints)
         if note:
             warnings.append(f"{' '.join(args)} schema: {note}")
-        nxt, more, _total = page_info(result if isinstance(result, dict) else {})
+        nxt, more, _total = page_info(result_dict)
+        if more and not nxt:
+            meta["complete"] = False
         return got, nxt, more, None
 
     rows, pages, errors = collect_pages(fetch)
     for err in errors:
         warnings.append(f"{' '.join(args)}: {err}")
-    return rows, pages, warnings, (not errors or bool(rows))
+        meta["complete"] = False
+    return rows, pages, warnings, (not errors or bool(rows)), meta
+
+def extra_worker_runs(scope, complete, run_ids):
+    if scope == "all" and complete:
+        return []
+    return [run_id for run_id in run_ids if isinstance(run_id, str)]
+
+def task_run_ids(workers):
+    found = []
+    for worker in workers:
+        if not isinstance(worker, dict):
+            continue
+        run_id = worker_run_id(worker)
+        if isinstance(run_id, str) and run_id not in found:
+            found.append(run_id)
+    return found
 
 def fetch_capped(args, names, hints):
     warnings = []
@@ -554,7 +640,17 @@ def build_rows(snapshot):
             info["branch"] = first(terminal, "branch")
         return info
 
-    def add_row(*, origin, agent, path, info, feature_links, tasks, session, activity_parts, times, worktree_label=None):
+    def terminal_status_of(terminal):
+        if not isinstance(terminal, dict):
+            return "UNKNOWN"
+        connected = terminal.get("connected", terminal.get("isConnected"))
+        if connected is True:
+            return "CONNECTED"
+        if connected is False:
+            return "DISCONNECTED"
+        return "UNKNOWN"
+
+    def add_row(*, origin, agent, path, info, feature_links, tasks, session, activity_parts, times, terminal_status="UNKNOWN", worktree_label=None):
         branch_feature = feature_from_branch((info or {}).get("branch"))
         features = set(feature_links or [])
         if branch_feature:
@@ -578,6 +674,7 @@ def build_rows(snapshot):
             "Session": cell(session),
             "Activity": " ".join(activity_parts) if activity_parts else "-",
             "Updated": latest_update(times),
+            "TerminalStatus": terminal_status or "UNKNOWN",
             "_path": path or "",
         })
 
@@ -639,6 +736,7 @@ def build_rows(snapshot):
                     session=handle,
                     activity_parts=activity,
                     times=times,
+                    terminal_status=terminal_status_of(terminal),
                 )
     for worker in workers:
         if id(worker) in consumed_workers:
@@ -706,21 +804,14 @@ def build_rows(snapshot):
     return rows, warnings
 
 def collect_snapshot():
+    global CLI_CALLS
+    CLI_CALLS = 0
     warnings = []
     if shutil.which("orca") is None:
         return None, ["không tìm thấy lệnh orca"]
     ps_rows, ps_warnings, ps_ok = fetch_capped(["worktree", "ps"], ["worktrees"], ["path", "repo", "agents"])
     term_rows, term_warnings, term_ok = fetch_capped(["terminal", "list"], ["terminals"], ["handle", "worktreePath"])
-    wt_rows, wt_warnings, _wt_ok = fetch_capped(["worktree", "list"], ["worktrees"], ["path", "repoId"])
-    repo_data, repo_err = orca_json(["repo", "list"])
-    repos, repo_note = ([], None)
-    if repo_err:
-        warnings.append(f"repo list: {repo_err}")
-    else:
-        repos, repo_note = find_rows(repo_data.get("result"), ["repos"], ["displayName", "path", "id"])
-        if repo_note:
-            warnings.append(f"repo list schema: {repo_note}")
-    run_rows, run_pages, run_warnings, run_ok = fetch_named(
+    run_rows, run_pages, run_warnings, run_ok, _run_meta = fetch_named(
         ["orchestration", "run-list"], ["runs"], ["id", "objective"], PAGE_LIMIT
     )
     run_ids = []
@@ -729,15 +820,15 @@ def collect_snapshot():
             run_id = first(run, "id", "runId", "run_id")
             if isinstance(run_id, str):
                 run_ids.append(run_id)
-    workers, worker_warnings = [], []
-    unbound, unbound_pages, unbound_warnings, worker_ok = fetch_named(
+    unbound, unbound_pages, unbound_warnings, worker_ok, worker_meta = fetch_named(
         ["orchestration", "worker-list"], ["workers"], ["dispatchId", "taskId", "agentTerminalHandle"], PAGE_LIMIT
     )
-    workers.extend(unbound)
-    worker_warnings.extend(unbound_warnings)
+    workers = list(unbound)
+    worker_warnings = list(unbound_warnings)
     scoped_pages = unbound_pages
-    for run_id in run_ids:
-        scoped, pages, notes, scoped_ok = fetch_named(
+    extra_runs = extra_worker_runs(worker_meta.get("scope"), worker_meta.get("complete"), run_ids)
+    for run_id in extra_runs:
+        scoped, pages, notes, scoped_ok, _meta = fetch_named(
             ["orchestration", "worker-list", "--run", run_id],
             ["workers"],
             ["dispatchId", "taskId", "agentTerminalHandle"],
@@ -747,13 +838,27 @@ def collect_snapshot():
         workers.extend(scoped)
         scoped_pages += pages
         worker_warnings.extend(notes)
+    ps_paths = {norm_path(first(row, "path")) for row in ps_rows if isinstance(row, dict)}
+    ps_paths.discard(None)
+    need_catalog = any(not worker_path(worker) or worker_path(worker) not in ps_paths for worker in workers if isinstance(worker, dict))
+    wt_rows, wt_warnings, repos = [], [], []
+    if need_catalog:
+        wt_rows, wt_warnings, _wt_ok = fetch_capped(["worktree", "list"], ["worktrees"], ["path", "repoId"])
+        repo_data, repo_err = orca_json(["repo", "list"])
+        if repo_err:
+            warnings.append(f"repo list: {repo_err}")
+        else:
+            repos, repo_note = find_rows(repo_data.get("result"), ["repos"], ["displayName", "path", "id"])
+            if repo_note:
+                warnings.append(f"repo list schema: {repo_note}")
     tasks = []
     task_warnings = []
+    wanted_runs = task_run_ids(workers)
     if not run_ids and not run_ok:
         task_warnings.append("task-list: run-list lỗi, không gọi task-list")
-    elif not run_ids:
-        task_warnings.append("task-list: không có Run id, không gọi task-list")
-    for run_id in run_ids:
+    elif workers and not wanted_runs:
+        task_warnings.append("task-list: worker không có Run id, không gọi task-list")
+    for run_id in wanted_runs:
         data, err = orca_json(["orchestration", "task-list", "--run", run_id, "--brief"])
         if err:
             task_warnings.append(f"task-list {run_id}: {err}")
@@ -784,66 +889,340 @@ def collect_snapshot():
             "run_pages": run_pages,
             "workers": len({worker_key(worker) for worker in workers if isinstance(worker, dict)}),
             "worker_pages": scoped_pages,
+            "worker_scope": worker_meta.get("scope") or "-",
+            "extra_worker_queries": len(extra_runs),
             "tasks": len(tasks),
             "terminals": len(term_rows),
             "worktree_ps": len(ps_rows),
+            "cli_commands": CLI_CALLS,
         },
         "source_ok": ps_ok or term_ok or run_ok or worker_ok,
     }
     return snapshot, warnings
 
-def render(rows, warnings, stats):
+def bucket_of(token):
+    if not isinstance(token, str):
+        return "UNKNOWN"
+    name = token.strip().casefold()
+    if name in WORKING_TOKENS:
+        return "WORKING"
+    if name in WAITING_TOKENS:
+        return "WAITING"
+    if name in COMPLETED_TOKENS:
+        return "COMPLETED"
+    return "UNKNOWN"
+
+def split_activity(activity):
+    pane = activity_field = worker = None
+    interrupted = False
+    if isinstance(activity, str) and activity not in ("", "-"):
+        for part in activity.split():
+            if part == "interrupted":
+                interrupted = True
+            elif part.startswith("pane:"):
+                pane = part.split(":", 1)[1]
+            elif part.startswith("activity:"):
+                activity_field = part.split(":", 1)[1]
+            elif part.startswith("worker:"):
+                worker = part.split(":", 1)[1]
+    return pane, activity_field, worker, interrupted
+
+def task_fields(task):
+    if not isinstance(task, str) or task.strip() in ("", "-"):
+        return "-", None
+    statuses = re.findall(r"\(status=([^)]+)\)", task)
+    ids = re.sub(r"\s*\(status=[^)]+\)", "", task).strip() or "-"
+    status = ", ".join(dict.fromkeys(statuses)) if statuses else None
+    return ids, status
+
+def classify_row(row):
+    pane, activity, worker, interrupted = split_activity(row.get("Activity"))
+    if pane:
+        agent_status = bucket_of(pane)
+    elif activity:
+        agent_status = bucket_of(activity)
+    else:
+        agent_status = "UNKNOWN"
+    worker_bucket = bucket_of(worker) if worker else "UNKNOWN"
+    if agent_status == "WORKING" or (agent_status == "UNKNOWN" and worker_bucket == "WORKING"):
+        bucket = "WORKING"
+    elif agent_status == "WAITING" or (agent_status == "UNKNOWN" and worker_bucket == "WAITING"):
+        bucket = "WAITING"
+    elif interrupted:
+        bucket = "INTERRUPTED"
+    elif agent_status == "COMPLETED":
+        bucket = "COMPLETED"
+    else:
+        bucket = "UNKNOWN"
+    task_ids, task_status = task_fields(row.get("Task"))
+    if task_ids != "-" and not task_status:
+        task_status = "UNKNOWN"
+    return {
+        "origin": row.get("Origin") or "manual",
+        "agent": cell(row.get("Agent")),
+        "repository": cell(row.get("Repository")),
+        "feature": cell(row.get("Feature")),
+        "task": task_ids,
+        "task_status": task_status,
+        "worktree": cell(row.get("Worktree")),
+        "agent_status": agent_status,
+        "worker_status": worker.strip().upper() if isinstance(worker, str) and worker.strip() else None,
+        "terminal_status": row.get("TerminalStatus") or "UNKNOWN",
+        "interrupted": interrupted,
+        "session": cell(row.get("Session")),
+        "updated": cell(row.get("Updated")),
+        "bucket": bucket,
+    }
+
+def classify_rows(rows):
+    return [classify_row(row) for row in rows]
+
+def feature_match(feature, key):
+    if not key:
+        return True
+    wanted = key.strip().casefold()
+    parts = [part.strip().casefold() for part in str(feature).split("|")]
+    return wanted in parts
+
+def visible_rows(rows, show_all, feature):
+    chosen = [row for row in rows if feature_match(row["feature"], feature)]
+    if show_all:
+        return chosen
+    return [row for row in chosen if row["bucket"] in ATTENTION]
+
+def summarize(rows):
+    counts = {"WORKING": 0, "WAITING": 0, "COMPLETED": 0, "INTERRUPTED": 0, "UNKNOWN": 0}
+    for row in rows:
+        counts[row["bucket"]] = counts.get(row["bucket"], 0) + 1
+    return {
+        "total": len(rows),
+        "working": counts["WORKING"],
+        "waiting_blocked": counts["WAITING"],
+        "completed": counts["COMPLETED"],
+        "interrupted_unknown": counts["INTERRUPTED"] + counts["UNKNOWN"],
+    }
+
+def use_color(stream):
+    if os.environ.get("NO_COLOR") or os.environ.get("TERM") == "dumb":
+        return False
+    return bool(stream.isatty())
+
+def term_width():
+    raw = os.environ.get("COLUMNS")
+    if raw and raw.isdigit():
+        return max(40, min(200, int(raw)))
+    return max(40, min(200, shutil.get_terminal_size((100, 24)).columns))
+
+def fit(text, width):
+    text = "" if text is None else str(text).replace("\n", " ")
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "…"
+    return text[:width - 1] + "…"
+
+def paint(text, code, enabled):
+    if not enabled or not code:
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+def status_code(bucket):
+    return {"WORKING": "32", "WAITING": "33", "COMPLETED": "36", "INTERRUPTED": "35"}.get(bucket, "2")
+
+def column_sizes(width):
+    agent_w = 8
+    rest = max(0, width - agent_w - 4)
+    each = rest // 4
+    leftover = rest - each * 4
+    return [agent_w, each, each, each, each + leftover]
+
+def pad(text, width):
+    clipped = fit(text, width)
+    return clipped.ljust(width)
+
+def status_text(row):
+    parts = [f"agent {row['agent_status']}"]
+    if row.get("worker_status"):
+        parts.append(f"worker {row['worker_status']}")
+    if row.get("task_status"):
+        parts.append(f"task {row['task_status']}")
+    elif row.get("task") not in (None, "-"):
+        parts.append("task UNKNOWN")
+    parts.append(f"term {row['terminal_status']}")
+    if row.get("interrupted"):
+        parts.append("interrupted")
+    return "  ".join(parts)
+
+def sort_rows(rows):
+    return sorted(rows, key=lambda row: (
+        BUCKET_ORDER.get(row["bucket"], 9),
+        row["repository"],
+        row["worktree"],
+        row["agent"],
+        row["session"],
+    ))
+
+def session_lines(row, width, detail, color):
+    status = status_text(row)
+    code = status_code(row["bucket"])
+    if width >= 100:
+        fields = (row["agent"], row["repository"], row["feature"], row["task"], row["worktree"])
+        line = " ".join(pad(value, size) for value, size in zip(fields, column_sizes(width)))
+        lines = [paint(fit(line, width), code, color)]
+        lines.append(paint(fit("  " + status, width), code, color))
+    else:
+        lines = [
+            paint(fit(f"{row['agent']}  {row['repository']}", width), code, color),
+            fit(f"{row['feature']}  {row['worktree']}", width),
+            paint(fit(f"task {row['task']}  {status}", width), code, color),
+        ]
+    if detail and row["session"] != "-":
+        lines.append(fit(row["session"], width))
+    return lines
+
+def dashboard_lines(rows, warnings, stats, options, width, color):
+    matched = [row for row in rows if feature_match(row["feature"], options.get("feature"))]
+    shown = visible_rows(rows, options.get("all"), options.get("feature"))
+    summary = summarize(matched)
+    hidden = summary["completed"] if not options.get("all") else 0
     now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
-    print(f"# agent-monitor {now}")
-    print("# Origin orchestration = có trong worker-list; manual = không có. '-' = thiếu dữ liệu, không suy đoán.")
-    if not rows:
-        print("Không có agent Claude/Codex/Cursor trong dữ liệu đã đọc.")
-    else:
-        widths = {name: len(name) for name in COLUMNS}
-        for row in rows:
-            for name in COLUMNS:
-                widths[name] = max(widths[name], len(cell(row.get(name))))
-        print("  ".join(name.ljust(widths[name]) for name in COLUMNS))
-        for row in rows:
-            print("  ".join(cell(row.get(name)).ljust(widths[name]) for name in COLUMNS))
-    print(f"# rows={len(rows)} orchestration={sum(1 for row in rows if row['Origin']=='orchestration')} manual={sum(1 for row in rows if row['Origin']=='manual')}")
-    if stats:
-        print(
-            "# sources "
-            + " ".join(f"{key}={value}" for key, value in stats.items())
-        )
+    mode = "once" if options.get("mode") == "once" else f"watch {options.get('seconds', 5)}s"
+    feature = options.get("feature") or "all"
+    lines = [
+        fit(f"Orca Agents  {now}  {mode}", width),
+        fit(
+            f"Sessions {summary['total']}   Working {summary['working']}   "
+            f"Waiting/Blocked {summary['waiting_blocked']}   Completed {summary['completed']}   "
+            f"Interrupted/Unknown {summary['interrupted_unknown']}",
+            width,
+        ),
+        fit(
+            f"feature {feature}   "
+            + ("all sessions" if options.get("all") else f"attention only   {hidden} completed hidden (--all)"),
+            width,
+        ),
+    ]
+    grouped = {
+        "orchestration": [row for row in shown if row["origin"] == "orchestration"],
+        "manual": [row for row in shown if row["origin"] != "orchestration"],
+    }
+    titles = (("orchestration", "ORCHESTRATION WORKERS"), ("manual", "MANUAL SESSIONS"))
+    for key, title in titles:
+        group = sort_rows(grouped[key])
+        lines.append(fit(f"{title}  {len(group)}", width))
+        if not group:
+            lines.append(fit("  không có session trong bộ lọc này", width))
+            continue
+        if width >= 100:
+            labels = ("Agent", "Repository", "Feature", "Task", "Worktree")
+            lines.append(fit(" ".join(pad(label, size) for label, size in zip(labels, column_sizes(width))), width))
+        else:
+            lines.append(fit("Agent  Repository", width))
+        for row in group:
+            lines.extend(session_lines(row, width, options.get("detail"), color))
     if warnings:
-        print("# warnings")
-        for warning in warnings:
-            print(f"- {warning}")
-    else:
-        print("# warnings: none")
+        lines.append(fit(f"Warnings {len(warnings)}", width))
+        for warning in warnings[:3]:
+            lines.append(fit(f"- {warning}", width))
+        if len(warnings) > 3:
+            lines.append(fit(f"- … {len(warnings) - 3} cảnh báo nữa", width))
+    if stats:
+        lines.append(fit(
+            "sources "
+            + " ".join(f"{key}={value}" for key, value in stats.items()),
+            width,
+        ))
+    return [fit(line, width) if "\033" not in line else line for line in lines], summary, shown
+
+def plain_len(text):
+    return len(re.sub(r"\033\[[0-9;]*m", "", text))
+
+def json_payload(rows, warnings, stats, options):
+    matched = [row for row in rows if feature_match(row["feature"], options.get("feature"))]
+    shown = visible_rows(rows, options.get("all"), options.get("feature"))
+    summary = summarize(matched)
+    summary["shown"] = len(shown)
+
+    def public(row):
+        item = dict(row)
+        item.pop("interrupted", None)
+        return item
+
+    return {
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "summary": summary,
+        "orchestration": [public(row) for row in sort_rows(shown) if row["origin"] == "orchestration"],
+        "manual": [public(row) for row in sort_rows(shown) if row["origin"] != "orchestration"],
+        "warnings": warnings,
+        "sources": stats or {},
+    }
+
+def emit_text(lines, clear):
+    if clear:
+        sys.stdout.write("\033[H\033[2J")
+    sys.stdout.write("\n".join(lines) + "\n")
+    sys.stdout.flush()
 
 def snapshot_ok(snapshot):
     return bool(snapshot.get("source_ok"))
 
-def run_once():
+def load_view():
     snapshot, warnings = collect_snapshot()
+    if snapshot is None:
+        return None, warnings, [], {}
+    rows, row_warnings = build_rows(snapshot)
+    return snapshot, row_warnings, classify_rows(rows), snapshot.get("stats") or {}
+
+def run_once(options):
+    snapshot, warnings, rows, stats = load_view()
     if snapshot is None:
         for warning in warnings:
             print(f"- {warning}", file=sys.stderr)
         return 2
-    rows, row_warnings = build_rows(snapshot)
-    render(rows, row_warnings, snapshot.get("stats"))
+    if options.get("json"):
+        print(json.dumps(json_payload(rows, warnings, stats, options), ensure_ascii=False, indent=2))
+        return 0 if snapshot_ok(snapshot) else 2
+    color = use_color(sys.stdout)
+    lines, _summary, _shown = dashboard_lines(rows, warnings, stats, options, term_width(), color)
+    emit_text(lines, clear=False)
     return 0 if snapshot_ok(snapshot) else 2
 
-def run_watch(seconds):
-    while True:
-        started = time.monotonic()
-        if sys.stdout.isatty():
-            sys.stdout.write("\033[2J\033[H")
-        code = run_once()
+def run_watch(options):
+    tty = sys.stdout.isatty() and not options.get("json")
+    if tty:
+        sys.stdout.write("\033[?1049h\033[?25l")
         sys.stdout.flush()
-        if code == 2 and shutil.which("orca") is None:
-            return 2
-        remaining = seconds - (time.monotonic() - started)
-        if remaining > 0:
-            time.sleep(remaining)
+    try:
+        while True:
+            started = time.monotonic()
+            snapshot, warnings, rows, stats = load_view()
+            if snapshot is None:
+                for warning in warnings:
+                    print(f"- {warning}", file=sys.stderr)
+                if shutil.which("orca") is None:
+                    return 2
+            elif options.get("json"):
+                print(json.dumps(json_payload(rows, warnings, stats, options), ensure_ascii=False), flush=True)
+            else:
+                color = use_color(sys.stdout)
+                lines, _summary, _shown = dashboard_lines(rows, warnings, stats, options, term_width(), color)
+                emit_text(lines, clear=tty)
+            remaining = options["seconds"] - (time.monotonic() - started)
+            if remaining > 0:
+                time.sleep(remaining)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        if tty:
+            sys.stdout.write("\033[?25h\033[?1049l")
+            sys.stdout.flush()
+
+def render(rows, warnings, stats):
+    options = {"mode": "once", "seconds": 5, "all": True, "feature": None, "detail": True, "json": False}
+    lines, _summary, _shown = dashboard_lines(classify_rows(rows), warnings, stats, options, term_width(), False)
+    emit_text(lines, clear=False)
 
 def self_test():
     failures = []
@@ -991,6 +1370,42 @@ def self_test():
     check("no-short-task-id", short_ids == ["T2-review"])
     full_ids = [item for item in INLINE_TASK_RE.findall("Task: task_76912f16db8b Terminal: term_abc") if TASK_ID_RE.fullmatch(item)]
     check("inline-task-id", full_ids == ["task_76912f16db8b"])
+    classified = classify_rows(built)
+    by_class = {row["session"]: row for row in classified}
+    ambiguous = [row for row in classified if row["repository"] == "bidu-ai-backend" and row["agent"] == "claude"]
+    check("term-not-working", len(ambiguous) == 2 and all(row["agent_status"] == "UNKNOWN" and row["bucket"] == "UNKNOWN" for row in ambiguous))
+    check("connected-not-agent", any(row["terminal_status"] == "CONNECTED" and row["agent_status"] == "UNKNOWN" for row in ambiguous))
+    check("cursor-completed", by_class["term_33333333-3333-3333-3333-333333333333"]["bucket"] == "COMPLETED")
+    worker_view = by_class[handle]
+    check("worker-split", worker_view["agent_status"] == "COMPLETED" and worker_view["worker_status"] == "SUCCEEDED" and "REVIEW" in worker_view["task_status"] and "completed" in worker_view["task_status"])
+    attention = visible_rows(classified, False, None)
+    check("default-hides-completed", attention and all(row["bucket"] != "COMPLETED" for row in attention))
+    check("all-shows-completed", any(row["bucket"] == "COMPLETED" for row in visible_rows(classified, True, None)))
+    filtered = visible_rows(classified, True, "translate-ai")
+    check("feature-filter", filtered and all(row["feature"] == "translate-ai" for row in filtered))
+    unknown = classify_row({
+        "Origin": "orchestration", "Agent": "codex", "Repository": "r", "Worktree": "w", "Feature": "-",
+        "Task": "task_x", "Session": "term_hidden", "Activity": "activity:unknown worker:succeeded",
+        "Updated": "-", "TerminalStatus": "CONNECTED",
+    })
+    check("unknown-not-done", unknown["agent_status"] == "UNKNOWN" and unknown["bucket"] == "UNKNOWN" and unknown["worker_status"] == "SUCCEEDED")
+    only_term = classify_row({
+        "Origin": "manual", "Agent": "claude", "Repository": "r", "Worktree": "w", "Feature": "-",
+        "Task": "-", "Session": "term_only", "Activity": "-", "Updated": "-", "TerminalStatus": "CONNECTED",
+    })
+    check("terminal-not-running", only_term["agent_status"] == "UNKNOWN" and only_term["bucket"] == "UNKNOWN")
+    check("no-extra-worker-query", extra_worker_runs("all", True, ["run_a", "run_b"]) == [])
+    check("bound-worker-query", extra_worker_runs("bound", True, ["run_a"]) == ["run_a"])
+    options = {"mode": "once", "seconds": 5, "all": False, "feature": None, "detail": False, "json": False}
+    narrow, _summary, _shown = dashboard_lines(classified, [], {}, options, 60, False)
+    wide, _summary, _shown = dashboard_lines(classified, [], {}, {**options, "all": True, "detail": True}, 140, False)
+    check("narrow-fit", narrow and all(plain_len(line) <= 60 for line in narrow))
+    check("wide-fit", wide and all(plain_len(line) <= 140 for line in wide))
+    check("session-hidden", all(handle not in line for line in narrow))
+    check("session-detail", any(handle in line for line in wide))
+    check("parse-default", parse_args([])["mode"] == "watch" and parse_args([])["seconds"] == 5)
+    parsed = parse_args(["--once", "--all", "--feature", "translate-ai", "--detail", "--json"])
+    check("parse-flags", parsed["mode"] == "once" and parsed["all"] and parsed["feature"] == "translate-ai" and parsed["detail"] and parsed["json"])
     if failures:
         print("self-test failed: " + ", ".join(failures))
         return 1
@@ -998,15 +1413,12 @@ def self_test():
     return 0
 
 def main():
-    mode, seconds = parse_args(ARGS)
-    if mode == "self-test":
+    options = parse_args(ARGS)
+    if options["self_test"]:
         raise SystemExit(self_test())
-    if mode == "once":
-        raise SystemExit(run_once())
-    try:
-        raise SystemExit(run_watch(seconds))
-    except KeyboardInterrupt:
-        raise SystemExit(0)
+    if options["mode"] == "once":
+        raise SystemExit(run_once(options))
+    raise SystemExit(run_watch(options))
 
 if __name__ == "__main__":
     main()
