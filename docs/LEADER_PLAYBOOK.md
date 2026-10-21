@@ -1,6 +1,13 @@
 # Orca Manager V1 — Leader playbook
 
-Claude Code là Leader (phân tích, giao việc, kiểm chứng, báo cáo). Codex/Cursor là worker (implement, test). Orca CLI là lớp quản lý worktree/agent. Không xây thêm server/DB/dashboard.
+Quy tắc ràng buộc nằm ở `AGENTS.md` (nguồn duy nhất); playbook này mô tả cách vận hành. Không xây thêm server/DB/dashboard.
+
+## Vai trò và mode
+
+- **Claude Leader**: planning, dispatch, monitoring, verification, decision-making. Delegate-first; tự làm nhanh các thao tác quản trị nhỏ bằng CLI (đọc trạng thái, `git status`, cập nhật task file, tạo/tái sử dụng worktree).
+- **Codex/Cursor Worker**: phân tích source chuyên sâu, implementation, debugging, testing, technical review, Git phức tạp được giao. Không gán cứng agent theo loại repo.
+- **Mode** (user quyết định, không tự đổi): SETUP (sửa Harness, chỉ ở `main`), MONITOR (chỉ đọc), EXECUTE (giao task nghiệp vụ), REVIEW (kiểm chứng, không triển khai feature khác).
+- **Harness ownership**: Harness chỉ sửa ở Orca Manager/main. Ở `feat/*` chỉ ghi `docs/tasks/` của chính feature; lỗi Harness => ghi Change Request vào task file, báo user, chờ main xử lý. Guard: `scripts/guard-harness.sh`.
 
 ## Nguồn sự thật
 
@@ -18,15 +25,16 @@ Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-c
 ## Quy trình một feature
 
 1. **Intake**: ghi yêu cầu, acceptance criteria, repo bị ảnh hưởng vào task file (từ TEMPLATE.md). Chia task theo repo, đánh dấu dependency và task chạy song song.
-2. **Chuẩn bị worktree** (theo AGENTS.md): `git fetch origin <base>`; ưu tiên tái sử dụng worktree đang có (`orca worktree list --json`, tìm theo branch `feat/<feature-key>`); chỉ tạo mới khi chưa có:
-   `orca worktree create --repo <selector> --name <feature-key> --base-branch <base> --no-parent --setup inherit --json`
-   Ghi repo/base/branch/path/status vào bảng worktree **trước khi** giao code.
+2. **Chuẩn bị worktree** (theo AGENTS.md mục 3): đọc `baseRef` + `status` của từng repo trong `config/repositories.yaml` (không mặc định develop/main; thiếu hoặc chưa `verified` => hỏi user trước). Kiểm tra repo, remote, branch, path, `git status`, `orca worktree list --json`; ưu tiên tái sử dụng worktree của `feat/<feature-key>`; chỉ tạo mới khi chưa có: `git fetch origin <branch của baseRef>` rồi
+   `orca worktree create --repo <selector> --name <feature-key> --base-branch <baseRef> --no-parent --setup inherit --json`
+   Ghi repo/baseRef/branch/path/status vào bảng worktree **trước khi** giao code.
 3. **Chọn worker**: theo độ phức tạp, agent đang sẵn sàng/phiên có thể tiếp tục (`orca terminal list --json`), chi phí. Không gán cứng agent theo công nghệ. Một worktree chỉ một worker ghi tại một thời điểm.
 4. **Tra skill**: lấy skill từ registry theo repo + loại task, kiểm tra file tồn tại trong worktree được giao (`test -f "<worktree>/<path>"`), ghi path vào handoff. Chỉ truyền path, không đọc nội dung vào context Leader. Chưa xác minh Codex/Cursor tự nhận skill giống nhau nên luôn truyền path tường minh.
 5. **Giao việc** bằng `docs/tasks/HANDOFF_TEMPLATE.md`:
    - Giao có giám sát: `orca orchestration run-create --objective "<feature>" --json`, rồi `orca orchestration worker-start --spec "<handoff>" --worktree path:<path> --agent <codex|cursor|claude> --json`; chờ bằng `orca orchestration check --wait --types worker_done,escalation,question --json`.
    - Giao đơn giản/không giám sát: dùng `orca-cli` (terminal tới phiên có sẵn bằng `orca terminal send`).
    Không khởi chạy trùng: kiểm tra `orca worktree ps --json` và `orca orchestration worker-list` trước.
+   **Xác minh dispatch thật** (chỉ ở EXECUTE): sau khi giao, đối chiếu `orca orchestration worker-list` / `orca terminal list --json` để có worker ID, session/terminal ID, repo, worktree và task khớp với task table; ghi vào task file. Dispatch lỗi => báo lỗi cho user kèm output; Leader không tự chuyển sang coding.
 6. **Theo dõi theo checkpoint** (không đọc log liên tục): khi có `worker_done`/escalation, hoặc khi người dùng yêu cầu. Trạng thái agent lấy bằng `scripts/agent-monitor.sh` (một lần hoặc `--watch 5`), không đọc log và không gọi AI cho mỗi lần refresh. Đọc kết quả giới hạn: `orca orchestration worker-read` / `orca terminal read` với giới hạn nhỏ. Timeout/empty không phải thất bại; không stop/retry khi chưa có bằng chứng tiến trình đã thoát.
 7. **Verify**: xem bên dưới. Chưa đạt -> gửi chỉnh sửa cụ thể (`orchestration send`/`terminal send`) thay vì tự sửa.
 8. **Approve & báo cáo**: cập nhật task file, tổng hợp tiến độ/test/blocker/quyết định cần người dùng duyệt.
@@ -74,7 +82,7 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 
 - Tối đa **2 vòng sửa** cho mỗi task: mỗi vòng nêu phần không đạt + tiêu chí đúng + phạm vi được sửa. Sau vòng 2 vẫn lỗi -> `FAILED`/`BLOCKED`, escalate cho người dùng kèm bằng chứng.
 - Phần phức tạp (security, migration, contract liên repo) giao reviewer độc lập (worker/agent khác với người implement) và chỉ nhận báo cáo ngắn.
-- Cần người dùng duyệt (`WAITING_APPROVAL`) trước: merge/push, thay đổi kiến trúc hay API contract, xóa/reset worktree, tạo worktree mới ở repo `needs-confirmation`, bổ sung domain skill. Leader không tự push hay merge.
+- Cần người dùng duyệt (`WAITING_APPROVAL`) trước: merge/push, baseRef chưa verified, thay đổi kiến trúc hay API contract, xóa/reset worktree, tạo worktree mới ở repo `needs-confirmation`, bổ sung domain skill. Leader không tự push hay merge.
 
 ## Tối ưu token
 
@@ -85,7 +93,12 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 
 ## Kiểm tra cấu hình
 
-`scripts/check-config.sh` (read-only): YAML hợp lệ, mọi repo resolve qua Orca, mọi skill path tồn tại. Chạy sau khi sửa registry.
+`scripts/check-config.sh` (read-only): YAML hợp lệ, trường baseRef/status của từng repo, mọi repo resolve qua Orca, mọi skill path tồn tại, không còn rule lỗi thời (mặc định develop/main), hooks guard đã bật. Chạy sau khi sửa Harness.
+`scripts/guard-harness.sh` (read-only): ở feature worktree báo file Harness bị sửa trái phép (working tree + commit so với main); chạy tự động qua `.githooks/pre-commit`. Hook không chặn được `--no-verify`, nên Leader chạy guard ở bước Verify.
+
+## Đồng bộ Harness sang feature worktree
+
+Chỉ khi user yêu cầu và worktree sạch (`git status` không có thay đổi). Feature worktree không tự sync. Việc đồng bộ do user hoặc phiên SETUP thực hiện; nếu worktree đã có commit, ưu tiên không rebase/merge mà dùng Harness từ main đọc trực tiếp (đường dẫn tuyệt đối của main).
 
 ## Roadmap (chưa triển khai)
 

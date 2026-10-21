@@ -4,7 +4,8 @@ Gửi cho worker (Codex/Cursor). Giữ ngắn; không dán lịch sử feature.
 
 - Feature: <feature-key> | Task: <TASK-ID> | Depends on: <task-id hoặc none>
 - Repo: <repo id trong config/repositories.yaml>
-- Worktree: <path tuyệt đối> (branch `feat/<feature-key>`, base <ref>)
+- Worktree: <path tuyệt đối> (branch `feat/<feature-key>`)
+- baseRef: <baseRef của repo trong config/repositories.yaml, status verified>
   Đã xác minh: repo, branch, path, `git status` sạch/ghi chú thay đổi sẵn có.
 
 ## Phạm vi được sửa
@@ -18,9 +19,10 @@ Gửi cho worker (Codex/Cursor). Giữ ngắn; không dán lịch sử feature.
 
 ## Skill/rule phải đọc (path trong worktree trên)
 - <path từ config/skill-registry.yaml, đã xác minh tồn tại> | hoặc guidance: AGENTS.md, CLAUDE.md
-- Không tạo/sửa skill. Nếu thiếu skill, dùng code + tài liệu có sẵn và báo thiếu.
+- Phải áp dụng skill/rule trên; nêu trong báo cáo đã dùng gì. Không tạo/sửa/sao chép skill. Nếu thiếu skill, dùng code + tài liệu có sẵn và báo thiếu.
 
 ## Không được làm
+- Sửa Harness của Orca Manager (AGENTS.md, CLAUDE.md, config/, scripts/, .githooks/, playbook, templates, management skills). Thấy Harness lỗi: báo Leader, không tự sửa.
 - Sửa ngoài phạm vi; reset/force-push/xóa worktree; merge vào branch bảo vệ; commit .env/credential.
 - Đổi kiến trúc hoặc API contract: dừng và escalate.
 

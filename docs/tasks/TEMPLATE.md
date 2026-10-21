@@ -12,9 +12,9 @@ Mô tả ngắn yêu cầu và phạm vi được người dùng giao.
 
 ## Repositories and worktrees
 
-| Repo | Base | Branch | Worktree path | Status |
+| Repo | baseRef | Branch | Worktree path | Status |
 | --- | --- | --- | --- | --- |
-| <repo> | origin/develop hoặc origin/main | feat/<feature-key> | /Users/android/orca/workspaces/... | ready |
+| <repo> | <baseRef trong config/repositories.yaml> | feat/<feature-key> | /Users/android/orca/workspaces/... | ready |
 
 ## Tasks
 
@@ -31,7 +31,7 @@ Status: TODO, READY, IN_PROGRESS, REVIEW, DONE, BLOCKED, FAILED, WAITING_APPROVA
 ## Plan
 
 - [ ] Xác định repo liên quan.
-- [ ] Fetch base branch mới nhất.
+- [ ] Đọc baseRef (verified) và fetch đúng branch.
 - [ ] Tạo hoặc kiểm tra worktree.
 - [ ] Implement.
 - [ ] Test/build/validation.

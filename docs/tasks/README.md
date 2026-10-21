@@ -22,7 +22,7 @@ Nếu cùng một feature có nhiều giai đoạn, giữ một file task và th
 Khi bắt đầu task:
 
 1. Tạo file từ [TEMPLATE.md](./TEMPLATE.md).
-2. Ghi yêu cầu, feature-key, repo liên quan và base ref.
+2. Ghi yêu cầu, feature-key, repo liên quan và baseRef (đọc từ `config/repositories.yaml`, không đoán).
 3. Tạo worktree theo quy tắc trong [ORCA_MANAGER_GUIDE.md](../ORCA_MANAGER_GUIDE.md).
 4. Ghi path, branch và trạng thái từng worktree.
 
@@ -53,6 +53,10 @@ Tìm task theo feature:
 ~~~bash
 rg -n -i 'case9|translation|blocked|in-progress' docs/tasks
 ~~~
+
+## Quyền ghi
+
+Ở worktree `feat/*` chỉ được tạo/sửa task file của chính feature (`YYYY-MM-DD-<feature-key>[-suffix].md`). `README.md`, `TEMPLATE.md`, `HANDOFF_TEMPLATE.md` và task của feature khác chỉ sửa ở `main`. Đề xuất cải tiến Harness ghi thành mục "Change Request" trong task file của feature.
 
 ## Handoff và điều phối
 

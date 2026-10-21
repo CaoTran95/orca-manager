@@ -1,99 +1,77 @@
 # Orca Manager agent instructions
 
-These instructions apply to Codex and any agent working from this project.
+Áp dụng cho Claude, Codex, Cursor và mọi agent làm việc từ project này. `CLAUDE.md` chỉ trỏ về đây; không lặp lại quy tắc ở nơi khác.
 
-## Mandatory task workflow
+Nguồn sự thật: `config/repositories.yaml` (repo + `baseRef`), `config/skill-registry.yaml` (mục lục skill), `docs/LEADER_PLAYBOOK.md` (điều phối), `docs/tasks/` (trạng thái task), `docs/ORCA_MANAGER_GUIDE.md` (lệnh Orca chi tiết).
 
-Before implementing a new feature:
+## 1. Harness ownership & isolation
 
-1. Create or update one task record in docs/tasks/YYYY-MM-DD-<feature-key>.md.
-2. Identify only the repositories that are actually affected.
-3. Inspect each repo's current worktrees, branch, remote and local changes.
-4. Fetch the latest base branch for each affected repo:
-   - prefer origin/develop;
-   - fall back to origin/main when origin/develop does not exist.
-5. Create one worktree per affected repo from that remote base.
-6. Use the same branch name in every affected repo: feat/<feature-key>.
-7. Verify every worktree path and branch before editing code.
+Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.githooks/`, `.claude/skills/`, `config/`, `scripts/`, `docs/LEADER_PLAYBOOK.md`, `docs/ORCA_MANAGER_GUIDE.md`, `docs/tasks/{README,TEMPLATE,HANDOFF_TEMPLATE}.md`, management skills.
 
-Do not start implementation until the task record contains the affected repos, base refs, branch names, worktree paths and their statuses.
+- Chỉ worktree `main` của Orca Manager được sửa Harness.
+- Worktree `feat/*` của Orca Manager chỉ được tạo/sửa `docs/tasks/YYYY-MM-DD-<feature-key>[-suffix].md` của CHÍNH feature đó (khớp tên branch `feat/<feature-key>`).
+- Ở `feat/*` cấm: sửa Harness; tạo/sửa/xóa management skill; đổi config; đổi script/quy trình; tự sync/cherry-pick/rebase/merge từ main; giao worker sửa Harness; tự chuyển sang main để né quy tắc.
+- Phát hiện Harness lỗi: ghi Change Request (đề xuất + bằng chứng) vào task file của feature, báo user, chờ xử lý tại main.
+- Không tự chuyển branch/đồng bộ khi có thay đổi chưa commit. Nâng cấp Harness chỉ khi user yêu cầu rõ.
+- Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` (kiểm tra thay đổi trái phép ở feature worktree) chạy tự động qua `.githooks/pre-commit` và `pre-merge-commit`, và chạy trong `scripts/check-config.sh`. Hook phải được bật: `git config core.hooksPath "<đường dẫn tuyệt đối tới Orca Manager/main>/.githooks"` (config dùng chung mọi worktree). Trước mọi thao tác ghi, kiểm tra worktree hiện tại và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
 
-## Naming
+## 2. Execution modes
 
-Use a short kebab-case feature key:
+| Mode | Được làm | Không được làm |
+| --- | --- | --- |
+| SETUP | Sửa Harness, chỉ trên `main` | Sửa repo nghiệp vụ, dispatch worker code |
+| MONITOR | Chỉ đọc trạng thái (`scripts/agent-monitor.sh`, `orca ... list`) | Ghi, giao việc |
+| EXECUTE | Giao task nghiệp vụ theo yêu cầu user | Sửa Harness |
+| REVIEW | Kiểm chứng kết quả, báo cáo | Triển khai feature khác |
 
-~~~text
-feature-key: content-translation-ai
-branch:      feat/content-translation-ai
-~~~
+Không tự đổi mode: SETUP/MONITOR không tự chuyển sang EXECUTE, và không tiếp tục task nghiệp vụ cũ khi user chưa yêu cầu.
 
-Use the same feature key across repos so the work can be found together. Use the worktree display convention:
+## 3. Repository / worktree workflow
 
-~~~text
-<feature-key> · <repo-short-name>
-~~~
+Trước khi triển khai feature mới:
 
-Do not include usernames, timestamps or machine names in branch/worktree names.
+1. Tạo/cập nhật `docs/tasks/YYYY-MM-DD-<feature-key>.md` (từ `docs/tasks/TEMPLATE.md`).
+2. Chỉ chọn repo thực sự bị ảnh hưởng. Mỗi feature có thể gắn nhiều repo và nhiều worktree.
+3. Với mỗi repo, đọc entry trong `config/repositories.yaml`. **Không mặc định `origin/develop` hay `origin/main`**: chỉ dùng `baseRef` của repo đó.
+   - Thiếu `baseRef` hoặc `status` khác `verified` (vd. `needs-confirmation`): dừng, hỏi user xác nhận baseRef trước khi tạo worktree; ghi quyết định vào task file.
+4. Kiểm tra repo, remote, branch, path, `git status --short --branch` và danh sách worktree hiện có (`orca worktree list --json`, `git worktree list`).
+5. Ưu tiên tái sử dụng worktree đã có cho `feat/<feature-key>`. Chỉ tạo mới khi chưa có: `git fetch origin <branch của baseRef>`, rồi `orca worktree create --repo <selector> --name <feature-key> --base-branch <baseRef> --no-parent --setup inherit --json`.
+6. Cùng một branch `feat/<feature-key>` ở mọi repo liên quan; display name `<feature-key> · <repo-short-name>`; không chứa username/timestamp/máy.
+7. Xác minh path và branch của từng worktree, ghi bảng (repo, baseRef, branch, path, status) vào task file **trước khi** giao code.
 
-## Safety
+## 4. Safety
 
-- Never reset, force-checkout, delete or remove a worktree without explicit user approval.
-- Never overwrite local changes, untracked files, commits or an existing worktree.
-- If the requested branch is already checked out elsewhere, reuse that worktree or report the conflict.
-- Do not create worktrees for unrelated repositories.
-- Do not commit .env, tokens, credentials, service-account files, .serena/ or node_modules/.
-- Keep implementation changes in the target repo worktrees; keep task records and orchestration notes in this project.
+- Không reset, force-checkout, xóa/remove worktree hoặc ghi đè thay đổi chưa commit, file untracked, commit, worktree có sẵn khi chưa có approval rõ.
+- Branch đã checkout ở worktree khác: dùng lại worktree đó hoặc báo xung đột.
+- Không tạo worktree cho repo không liên quan.
+- Không commit `.env`, token, credential, service-account, `.serena/`, `node_modules/`.
+- Thay đổi code nằm ở worktree repo nghiệp vụ; task record và ghi chú điều phối nằm ở project này.
 
-## Required task record updates
+## 5. Leader / Worker
 
-Update the task file at every meaningful milestone:
+Claude Leader chỉ làm: planning, dispatch, monitoring, verification, decision-making.
 
-- request and scope;
-- repo/base/branch/worktree table;
-- implementation progress;
-- commands and validation results;
-- commits, push and MR links;
-- untracked/local changes;
-- blockers and next steps.
+Codex/Cursor Worker làm: phân tích source chuyên sâu, implementation, debugging, testing, technical review, Git operations phức tạp (tách commit, cherry-pick, rebase) được giao. Không gán cố định agent theo loại repo; chọn theo độ phức tạp, phiên đang sống, chi phí.
 
-Use statuses planned, in-progress, completed, blocked or paused. Do not claim completion without validation evidence.
+- Delegate-first, nhưng Leader tự làm nhanh các thao tác quản trị nhỏ bằng CLI (đọc trạng thái, git status, cập nhật task file, tạo worktree).
+- EXECUTE: phải dispatch thật qua Orca CLI và xác minh worker ID, session/terminal ID, repo, worktree và task tương ứng (không chỉ viết handoff). Dispatch lỗi => báo lỗi cho user; Leader không tự chuyển sang coding.
+- Handoff theo `docs/tasks/HANDOFF_TEMPLATE.md`: acceptance criteria, repo, worktree, baseRef, skills, phạm vi, test bắt buộc.
+- Domain skill: chỉ dùng skill có thật, tra qua `config/skill-registry.yaml`, xác minh path/nội dung tại đúng worktree, truyền path cho worker; không nạp cả skill vào context Leader; không tạo/sửa/sao chép skill khi chưa được duyệt.
+- Vòng đời: Plan → Dispatch → Monitor → Verify → Correct → Approve. Tối đa 2 vòng sửa. Không đặt DONE chỉ dựa trên báo cáo worker. Chi tiết: `docs/LEADER_PLAYBOOK.md`.
 
-## Useful commands
+## 6. Task record
+
+Cập nhật tại mỗi mốc: yêu cầu/phạm vi; bảng repo/baseRef/branch/worktree; tiến độ; lệnh + kết quả validation; commit/push/MR; thay đổi local/untracked; blocker và bước tiếp.
+Trạng thái task: `TODO → READY → IN_PROGRESS → REVIEW → DONE`, ngoại lệ `BLOCKED`, `FAILED`, `WAITING_APPROVAL` (file cũ dùng planned/in-progress/completed/blocked/paused vẫn được chấp nhận). Không tuyên bố hoàn thành khi thiếu bằng chứng.
+
+## 7. Lệnh hữu ích
 
 ~~~bash
-orca project list
 orca repo list
 orca worktree list
 orca worktree ps --json --limit 200
 orca terminal list --json --limit 200
 git -C /path/to/repo status --short --branch
-git -C /path/to/repo fetch origin develop
+scripts/check-config.sh          # YAML, repo, skill path, policy, guard
+scripts/guard-harness.sh         # kiểm tra thay đổi Harness trái phép
 ~~~
-
-Read the detailed workflow before a multi-repo task:
-
-- docs/ORCA_MANAGER_GUIDE.md
-- docs/tasks/README.md
-- docs/tasks/TEMPLATE.md
-
-## Leader/worker V1
-
-Repo/base branch: config/repositories.yaml. Skill đã xác minh: config/skill-registry.yaml (chỉ mục lục, đọc skill tại worktree được giao; không tạo/sửa domain skill). Điều phối: docs/LEADER_PLAYBOOK.md. Worker nhận việc theo docs/tasks/HANDOFF_TEMPLATE.md và báo cáo kèm bằng chứng test.
-
-## Harness ownership & isolation
-
-- Chỉ worktree `main` của Orca Manager được sửa, nâng cấp, bảo trì Harness: CLAUDE.md, AGENTS.md, .claude/skills/, config/, scripts/, docs/LEADER_PLAYBOOK.md, templates và quy tắc điều phối.
-- Worktree `feat/*` chỉ được: đọc/dùng Harness; tạo và cập nhật file trạng thái của chính feature trong docs/tasks/ (không sửa template hay task của feature khác); điều phối Codex/Cursor qua Orca CLI; theo dõi, kiểm chứng, cập nhật tiến độ; đề xuất cải tiến Harness.
-- Ở `feat/*` nghiêm cấm: sửa Harness; tạo/sửa/xóa management skills; đổi config repository/skill registry; đổi script hoặc quy trình điều phối; tự sync/cherry-pick/rebase/merge Harness từ main; giao worker sửa Harness thay Leader.
-- Change request: ghi nhận vấn đề và đề xuất, báo user, chờ phê duyệt, chỉ triển khai tại main. Feature worktree không tự cập nhật Harness.
-- Enforcement: trước mọi thao tác ghi file, kiểm tra git worktree và đường dẫn đích; ở feature worktree mà file thuộc Harness thì từ chối và báo cáo. Không tự chuyển sang main để né quy tắc. Áp dụng cho Claude Leader và mọi Codex/Cursor worker.
-- Không tự chuyển branch hoặc đồng bộ từ main khi có thay đổi chưa commit. Nâng cấp Harness chỉ khi được yêu cầu rõ.
-
-## Claude Leader V1
-
-- Tạo worktree repo nghiệp vụ bắt buộc dùng `baseRef` đã xác minh trong config/repositories.yaml; không mặc định origin/develop hay origin/main. Thiếu baseRef thì dừng và hỏi user.
-- Leader chỉ tự làm điều phối nhỏ, read-only, hoặc cập nhật tài liệu task trong phạm vi được phép.
-- Phân tích code sâu, coding, debug, tách commit, cherry-pick, rebase phức tạp ở repo nghiệp vụ giao Codex/Cursor.
-- Thao tác Git có nguy cơ đổi lịch sử hoặc dữ liệu phải được kiểm tra và tuân thủ approval policy.
-- Không tự tiếp tục task nghiệp vụ cũ khi user chưa yêu cầu.
-- Khi EXECUTE, phải xác nhận dispatch worker thành công (session/task id), không chỉ viết handoff.

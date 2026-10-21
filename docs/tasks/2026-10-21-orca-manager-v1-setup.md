@@ -57,3 +57,12 @@ Command: ruby YAML.safe_load_file + đối chiếu với `orca repo list --json`
 Result: repos=13 skills=12 bad=0 (mọi repo resolve được, mọi skill path tồn tại)
 Chưa chạy: giao worker thật (không có feature để giao; tránh khởi chạy agent không cần thiết).
 ~~~
+
+## Update 2026-10-21 — Harness Setup: enforce leader and harness policies (mode SETUP, main)
+
+- Thay rule cũ "origin/develop, fallback origin/main" bằng `baseRef` + `status` trong `config/repositories.yaml` (đổi tên trường `base_branch` -> `baseRef`); thiếu/chưa verified => hỏi user.
+- AGENTS.md viết lại làm nguồn duy nhất; CLAUDE.md và `.cursor/rules` chỉ tóm tắt/trỏ về.
+- Thêm mode SETUP/MONITOR/EXECUTE/REVIEW, vai trò Leader/Worker, xác minh dispatch, Harness ownership.
+- Guard mới: `scripts/guard-harness.sh`, `.githooks/pre-commit`, `.githooks/pre-merge-commit` (bật bằng `core.hooksPath` tuyệt đối tới main); `scripts/check-config.sh` kiểm tra baseRef/status, rule lỗi thời, hooks.
+- Validation: `scripts/check-config.sh` problems=0; guard kiểm tra trên clone tạm và worktree thật.
+- Phát hiện: worktree `feat-orca-manager-task-workflow` đang có thay đổi docs/tasks của feature khác (case9*); chưa xử lý, chờ user.

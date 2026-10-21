@@ -85,13 +85,13 @@ Ví dụ:
 orca repo add --path /Users/android/Desktop/android/bidu-ecommerce-webapp
 ```
 
-## 4. Cập nhật `origin/develop` an toàn
+## 4. Cập nhật baseRef an toàn
 
-`fetch` chỉ cập nhật remote-tracking ref, không ghi đè file local:
+`fetch` chỉ cập nhật remote-tracking ref, không ghi đè file local. `<branch>` là phần sau `origin/` của `baseRef` repo đó trong `config/repositories.yaml`:
 
 ```bash
-git -C /absolute/path/to/repository fetch origin develop
-git -C /absolute/path/to/repository log -1 --oneline origin/develop
+git -C /absolute/path/to/repository fetch origin <branch>
+git -C /absolute/path/to/repository log -1 --oneline origin/<branch>
 ```
 
 Trước khi merge/rebase, kiểm tra thay đổi local:
@@ -102,13 +102,13 @@ git -C /absolute/path/to/repository status --short --branch
 
 Không reset hoặc checkout cưỡng bức khi chưa xác nhận file local cần giữ.
 
-## 5. Tạo worktree mới từ `origin/develop`
+## 5. Tạo worktree mới từ baseRef
 
 ```bash
 orca worktree create \
   --repo path:/absolute/path/to/repository \
   --name feature-name \
-  --base-branch origin/develop \
+  --base-branch <baseRef> \
   --no-parent \
   --setup inherit \
   --json
@@ -120,7 +120,7 @@ Ví dụ:
 orca worktree create \
   --repo path:/Users/android/Desktop/android/bidu-ecommerce-webapp \
   --name feat/content-translation-ai \
-  --base-branch origin/develop \
+  --base-branch <baseRef> \
   --no-parent \
   --setup inherit \
   --json
@@ -202,26 +202,19 @@ Các nhóm thường gặp:
 
 Nếu phạm vi repo không rõ hoặc có nhiều cách hiểu làm thay đổi kết quả, AI phải hỏi trước khi tạo worktree.
 
-### Chọn base branch mới nhất
+### Chọn base branch (baseRef)
 
-Với từng repo liên quan, AI phải:
+Không mặc định `origin/develop` hay `origin/main`. Với từng repo liên quan, AI phải:
 
-1. Kiểm tra repo path và remote.
-2. Fetch branch gốc.
-3. Dùng `origin/develop` nếu repo có branch này.
-4. Nếu không có `develop`, dùng `origin/main`.
-5. Không dùng local `develop`/`main` cũ thay cho remote-tracking ref.
-
-```bash
-git -C /path/to/repo fetch origin develop
-git -C /path/to/repo show-ref --verify --quiet refs/remotes/origin/develop
-```
-
-Nếu không có `origin/develop`:
+1. Đọc entry của repo trong `config/repositories.yaml`: `baseRef` và `status`.
+2. `status` khác `verified` hoặc thiếu `baseRef` (vd. `needs-confirmation`): dừng, hỏi người dùng xác nhận baseRef, ghi quyết định vào task file trước khi tạo worktree.
+3. Kiểm tra repo path, remote, branch, `git status` và worktree hiện có; ưu tiên tái sử dụng.
+4. Fetch đúng branch của baseRef và xác minh ref tồn tại.
+5. Không dùng local branch cũ thay cho remote-tracking ref.
 
 ```bash
-git -C /path/to/repo fetch origin main
-git -C /path/to/repo show-ref --verify --quiet refs/remotes/origin/main
+git -C /path/to/repo fetch origin <branch>
+git -C /path/to/repo show-ref --verify --quiet refs/remotes/origin/<branch>
 ```
 
 ### Tạo worktree tự động
@@ -232,7 +225,7 @@ Sau khi chọn base ref, AI tạo một worktree cho từng repo:
 orca worktree create \
   --repo path:/path/to/repo \
   --name <feature-key> \
-  --base-branch origin/develop \
+  --base-branch <baseRef> \
   --no-parent \
   --setup inherit \
   --json
@@ -259,9 +252,9 @@ Trước khi tạo, AI phải kiểm tra branch/worktree trùng tên. Nếu đã
 
 Sau khi chuẩn bị xong, AI phải báo một bảng ngắn gồm:
 
-| Repo | Base | Branch | Worktree | Trạng thái |
+| Repo | baseRef | Branch | Worktree | Trạng thái |
 | --- | --- | --- | --- | --- |
-| bidu-ecommerce-backend | origin/develop | feat/<feature-key> | `/Users/android/orca/workspaces/...` | ready |
+| bidu-ecommerce-backend | <baseRef> | feat/<feature-key> | `/Users/android/orca/workspaces/...` | ready |
 
 Chỉ sau khi tất cả worktree cần thiết ở trạng thái `ready`, AI mới bắt đầu sửa code. Nếu một repo bị thiếu remote, DNS, credential hoặc branch gốc, phải báo repo đó là `blocked` và không giả vờ đã tạo xong.
 
@@ -316,7 +309,7 @@ Dashboard tự map server vào worktree dựa trên thư mục chạy (`cwd`). N
 1. Tạo `feature-key` và xác định repo liên quan.
 2. Kiểm tra `orca status`, repo và worktree hiện tại.
 3. Kiểm tra `git status --short --branch` và branch trùng tên.
-4. Fetch branch gốc mới nhất; ưu tiên `origin/develop`, fallback `origin/main`.
+4. Đọc baseRef của từng repo trong `config/repositories.yaml` (chưa verified thì hỏi user) rồi fetch đúng branch đó.
 5. Tạo worktree/branch theo cùng một quy tắc tên ở mọi repo liên quan.
 6. Xác nhận path, branch và trạng thái `ready`.
 7. Chạy setup/test trong đúng worktree.
