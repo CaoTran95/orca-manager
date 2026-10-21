@@ -57,3 +57,25 @@ Kiểm tra tối thiểu, ưu tiên rẻ trước:
 ## Giới hạn Leader
 
 Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ source, tải log lớn. Giao worker; chỉ kéo bằng chứng ngắn. Không tự reset, force push, xóa worktree, merge vào branch bảo vệ, hay chỉnh checkout chính của repo nghiệp vụ.
+
+## Retry, escalation và phê duyệt
+
+- Tối đa **2 vòng sửa** cho mỗi task: mỗi vòng nêu phần không đạt + tiêu chí đúng + phạm vi được sửa. Sau vòng 2 vẫn lỗi -> `FAILED`/`BLOCKED`, escalate cho người dùng kèm bằng chứng.
+- Phần phức tạp (security, migration, contract liên repo) giao reviewer độc lập (worker/agent khác với người implement) và chỉ nhận báo cáo ngắn.
+- Cần người dùng duyệt (`WAITING_APPROVAL`) trước: merge/push, thay đổi kiến trúc hay API contract, xóa/reset worktree, tạo worktree mới ở repo `needs-confirmation`, bổ sung domain skill. Leader không tự push hay merge.
+
+## Tối ưu token
+
+- Thu thập trạng thái bằng script/CLI, không dùng AI: `scripts/orca-status.sh [feature-key]`, `scripts/check-config.sh`, `git status/diff --stat`.
+- Chỉ đọc phần cần cho quyết định hiện tại; worker đọc source và skill. Báo cáo worker <= 15 dòng; log dài lưu file và truyền path.
+- Tiếp tục phiên worker đang sống (`orca terminal list`) thay vì khởi động lại; không phân tích lại feature khi task file còn hợp lệ.
+- Không bỏ test/review để tiết kiệm token.
+
+## Kiểm tra cấu hình
+
+`scripts/check-config.sh` (read-only): YAML hợp lệ, mọi repo resolve qua Orca, mọi skill path tồn tại. Chạy sau khi sửa registry.
+
+## Roadmap (chưa triển khai)
+
+- V2: đồng bộ Base.vn MCP; quét/cập nhật registry định kỳ; Orca Automations theo lịch.
+- V3: điều phối theo sự kiện/giám sát liên tục; dashboard riêng nếu Orca chưa đủ.
