@@ -79,3 +79,8 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 
 - V2: đồng bộ Base.vn MCP; quét/cập nhật registry định kỳ; Orca Automations theo lịch.
 - V3: điều phối theo sự kiện/giám sát liên tục; dashboard riêng nếu Orca chưa đủ.
+
+## Bài học từ lần dispatch thực tế (Hermes T2, 2026-10-21)
+
+- **Follow-up sau `worker_done`**: worker đã settle không nhận thêm qua `orchestration send`. Gửi vòng sửa vào terminal worker đang sống: `orca terminal send --terminal <handle> --enter --text "<yêu cầu sửa cụ thể>"`, chờ `orca terminal wait --terminal <handle> --for tui-idle`, rồi đọc kết quả giới hạn bằng `orca terminal read --terminal <handle> --limit 40`. Ack delivery cũ bằng `orchestration check --ack <delivery_id>`. Tính vào giới hạn 2 vòng sửa; ghi vòng vào task file.
+- **Worktree thiếu môi trường chạy test** (ví dụ `.venv`): không cài/tạo venv trong repo và không để worker tự cài. Tìm môi trường sẵn có của cùng repo (`ls -d <workspaces>/<repo>/*/.venv`), chỉ cho worker dùng để chạy (không sửa), nêu rõ đường dẫn trong yêu cầu sửa. Không có môi trường phù hợp -> `BLOCKED`, ghi lý do, hỏi người dùng; không báo test pass khi chưa chạy.
