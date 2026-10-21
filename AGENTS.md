@@ -75,3 +75,7 @@ Read the detailed workflow before a multi-repo task:
 - docs/ORCA_MANAGER_GUIDE.md
 - docs/tasks/README.md
 - docs/tasks/TEMPLATE.md
+
+## Leader/worker V1
+
+Repo/base branch: config/repositories.yaml. Skill đã xác minh: config/skill-registry.yaml (chỉ mục lục, đọc skill tại worktree được giao; không tạo/sửa domain skill). Điều phối: docs/LEADER_PLAYBOOK.md. Worker nhận việc theo docs/tasks/HANDOFF_TEMPLATE.md và báo cáo kèm bằng chứng test.

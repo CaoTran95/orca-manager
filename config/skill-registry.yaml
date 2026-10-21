@@ -1,0 +1,98 @@
+# Danh mục domain skill đã xác minh tồn tại (chỉ là mục lục, KHÔNG phải nguồn nội dung).
+# Quy tắc: không tạo/sửa/sao chép domain skill. Trước khi giao việc, kiểm tra file tồn tại
+# trong ĐÚNG worktree được giao rồi ghi path vào handoff; worker đọc trực tiếp skill đó.
+# Cách mỗi agent tự nhận skill chưa được xác minh -> luôn truyền path tường minh trong handoff.
+version: 1
+verified_on: 2026-10-21
+skills:
+  - id: android-runtime-verification
+    repo: android-app
+    path: .claude/skills/android-runtime-verification/SKILL.md
+    also_at: [.cursor/skills/android-runtime-verification/SKILL.md, .codex/skills/android-runtime-verification/SKILL.md, .bidu/skills/android-runtime-verification/SKILL.md]
+    purpose: Kiểm chứng runtime trên thiết bị/emulator bằng Appium MCP, Maestro, adbridge, Gradle.
+    task_types: [runtime-verification, e2e, ui-check]
+    requires: Emulator/thiết bị, Appium MCP/Maestro
+    status: verified
+  - id: android-intent-security
+    repo: android-app
+    path: .bidu/skills/android-intent-security/SKILL.md
+    purpose: Audit Intent redirection và cấu hình component trong manifest.
+    task_types: [security-review]
+    status: verified
+  - id: android-permissions-security
+    repo: android-app
+    path: .bidu/skills/android-permissions-security/SKILL.md
+    purpose: Audit permission và IPC component.
+    task_types: [security-review]
+    status: verified
+  - id: agp-9-upgrade
+    repo: android-app
+    path: .bidu/skills/agp-9-upgrade/SKILL.md
+    purpose: Nâng cấp lên Android Gradle Plugin 9.
+    task_types: [build-upgrade]
+    status: verified
+  - id: r8-analyzer
+    repo: android-app
+    path: .bidu/skills/r8-analyzer/SKILL.md
+    purpose: Phân tích keep rules R8/Proguard.
+    task_types: [build-optimization]
+    status: verified
+  - id: testing-setup
+    repo: android-app
+    path: .bidu/skills/testing-setup/SKILL.md
+    purpose: Thiết lập chiến lược và hạ tầng test Android.
+    task_types: [testing]
+    status: verified
+  - id: bidu-workflow
+    repo: ecommerce-backend
+    path: .claude/skills/bidu-workflow/SKILL.md
+    also_at: [.bidu/skills/bidu-workflow/SKILL.md]
+    purpose: Quy trình làm việc backend BIDU khi nhận yêu cầu bằng lời (endpoint, hành vi, port module).
+    task_types: [feature, backend]
+    status: verified
+  - id: bidu-debugging
+    repo: ecommerce-backend
+    path: .claude/skills/bidu-debugging/SKILL.md
+    also_at: [.bidu/skills/bidu-debugging/SKILL.md]
+    purpose: Debug lỗi API, số liệu sai, job không chạy, test đỏ.
+    task_types: [debugging, backend]
+    status: verified
+  - id: bidu-workflow
+    repo: mcp
+    path: .claude/skills/bidu-workflow/SKILL.md
+    also_at: [.bidu/skills/bidu-workflow/SKILL.md]
+    purpose: Quy trình làm việc bidu-mcp (thêm/sửa tool, nối backend BIDU).
+    task_types: [feature, mcp]
+    status: verified
+  - id: bidu-debugging
+    repo: mcp
+    path: .claude/skills/bidu-debugging/SKILL.md
+    also_at: [.bidu/skills/bidu-debugging/SKILL.md]
+    purpose: Debug bidu-mcp.
+    task_types: [debugging, mcp]
+    status: verified
+  - id: create-page
+    repo: admin
+    path: .cursor/skills/create-page.md
+    purpose: Hướng dẫn tạo page (file skill dạng .md đơn, không có SKILL.md).
+    task_types: [frontend, page]
+    status: verified
+  - id: create-page
+    repo: webapp
+    path: .cursor/skills/create-page.md
+    purpose: Hướng dẫn tạo page (file skill dạng .md đơn, không có SKILL.md).
+    task_types: [frontend, page]
+    status: verified
+
+# Repo chưa có domain skill. Dùng guidance có sẵn; ghi nhận thiếu, không tự tạo skill.
+guidance_without_skills:
+  android-app: [AGENTS.md, CLAUDE.md, .codex/CONVENTION.md, .codex/rules/, .cursor/rules/]
+  ecommerce-backend: [AGENTS.md, CLAUDE.md, .cursor/rules/]
+  mcp: [AGENTS.md, CLAUDE.md, .cursor/rules/]
+  admin: [AGENTS.md, CLAUDE.md, .cursor/rules/]
+  webapp: [AGENTS.md, CLAUDE.md, .cursor/rules/]
+  hermes-agent: [AGENTS.md, CLAUDE.md]
+  marketing-backend: [CLAUDE.md]
+  community-backend: [CLAUDE.md]
+missing_skills_to_propose:
+  - Không có domain skill ở: marketing-backend, community-backend, commerce-cronjob-backend, ai-backend, hermes-agent, Android-Hardware-Profile, hermes-agentic. Đề xuất bổ sung cần người dùng duyệt.

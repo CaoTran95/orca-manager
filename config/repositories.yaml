@@ -1,0 +1,103 @@
+# Danh mục repository trung tâm cho Orca Manager.
+# Không lưu path máy: resolve bằng `orca repo show --repo <selector> --json`.
+# Worktree đang chạy: `orca worktree list --json` (nguồn sự thật, không copy vào đây).
+# verified: ngày kiểm tra bằng `git branch -r` + `orca repo list`.
+version: 1
+verified_on: 2026-10-21
+repositories:
+  - id: android-app
+    name: bithumb-fashion-android-app
+    selector: name:bithumb-fashion-android-app
+    remote: git@gitlab.com:bithumb.vn/bidu-android-app.git
+    kind: android
+    base_branch: origin/develop
+    status: verified
+  - id: ecommerce-backend
+    name: bidu-ecommerce-backend
+    selector: name:bidu-ecommerce-backend
+    remote: git@gitlab.com:bithumb.vn/bidu-ecommerce-backend.git
+    kind: backend
+    base_branch: origin/develop
+    status: verified
+    notes: origin/HEAD là master; worktree hiện có tạo từ develop.
+  - id: marketing-backend
+    name: bidu-marketing-backend
+    selector: name:bidu-marketing-backend
+    remote: git@gitlab.com:bithumb.vn/bidu-marketing-backend.git
+    kind: backend
+    base_branch: origin/develop
+    status: verified
+  - id: community-backend
+    name: bithumb-fashion-backend
+    selector: name:bithumb-fashion-backend
+    remote: git@gitlab.com:bithumb.vn/bidu-community-backend.git
+    kind: backend
+    base_branch: origin/develop
+    status: verified
+  - id: commerce-cronjob-backend
+    name: bidu-commerce-cronjob-backend
+    selector: name:bidu-commerce-cronjob-backend
+    remote: git@gitlab.com:bithumb.vn/bidu-commerce-cronjob-backend.git
+    kind: backend
+    base_branch: origin/staging
+    status: needs-confirmation
+    notes: Không có origin/develop; worktree hiện có dùng origin/staging, origin/HEAD là master. Hỏi người dùng trước khi tạo worktree mới.
+  - id: ai-backend
+    name: bidu-ai-backend
+    selector: name:bidu-ai-backend
+    remote: git@gitlab.com:bithumb.vn/bidu-ai-backend.git
+    kind: ai-backend
+    base_branch: origin/develop
+    status: verified
+    notes: origin/HEAD là main; worktree hiện có tạo từ develop.
+  - id: mcp
+    name: bidu-mcp
+    selector: name:bidu-mcp
+    remote: git@gitlab.com:bithumb.vn/bidu-mcp.git
+    kind: backend
+    base_branch: origin/develop
+    status: verified
+  - id: admin
+    name: bidu-admin
+    selector: name:bidu-admin
+    remote: git@gitlab.com:bithumb.vn/bidu-admin.git
+    kind: frontend
+    base_branch: origin/develop
+    status: verified
+  - id: webapp
+    name: bidu-ecommerce-webapp
+    selector: name:bidu-ecommerce-webapp
+    remote: git@gitlab.com:bithumb.vn/bidu-webapp.git
+    kind: frontend
+    base_branch: origin/develop
+    status: verified
+  - id: hermes-agent
+    name: bidu-hermes-agent
+    selector: name:bidu-hermes-agent
+    remote: git@github.com:dungbeotl/bidu-hermes-agent.git
+    kind: ai-agent
+    base_branch: origin/main
+    status: verified
+  - id: android-hardware-profile
+    name: Android-Hardware-Profile
+    selector: name:Android-Hardware-Profile
+    remote: https://github.com/Wildanafian/Android-Hardware-Profile.git
+    kind: android
+    base_branch: origin/main
+    status: verified
+  - id: hermes-agentic
+    name: Hermes Agentic
+    selector: name:Hermes Agentic
+    remote: null
+    kind: workspace
+    base_branch: main
+    status: verified
+    notes: Không có remote; dùng local main.
+  - id: orca-manager
+    name: Orca Manager
+    selector: name:Orca Manager
+    remote: null
+    kind: manager
+    base_branch: main
+    status: verified
+    notes: Repo điều phối này. Không có remote; không giao worker sửa trực tiếp checkout main.

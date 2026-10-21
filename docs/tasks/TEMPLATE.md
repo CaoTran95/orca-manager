@@ -16,6 +16,18 @@ Mô tả ngắn yêu cầu và phạm vi được người dùng giao.
 | --- | --- | --- | --- | --- |
 | <repo> | origin/develop hoặc origin/main | feat/<feature-key> | /Users/android/orca/workspaces/... | ready |
 
+## Tasks
+
+| Task ID | Repo | Worktree | Worker/session | Depends on | Status | Evidence | Commit/MR |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| T1 | <repo-id> | <path> | codex/cursor · <terminal handle> | none | TODO | | |
+
+Status: TODO, READY, IN_PROGRESS, REVIEW, DONE, BLOCKED, FAILED, WAITING_APPROVAL.
+
+## Acceptance criteria
+
+- [ ] <tiêu chí kiểm chứng được>
+
 ## Plan
 
 - [ ] Xác định repo liên quan.

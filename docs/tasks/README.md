@@ -53,3 +53,9 @@ Tìm task theo feature:
 ~~~bash
 rg -n -i 'case9|translation|blocked|in-progress' docs/tasks
 ~~~
+
+## Handoff và điều phối
+
+- Giao việc cho worker bằng [HANDOFF_TEMPLATE.md](./HANDOFF_TEMPLATE.md).
+- Quy trình Leader, verification và resume: [../LEADER_PLAYBOOK.md](../LEADER_PLAYBOOK.md).
+- Repo và skill: `config/repositories.yaml`, `config/skill-registry.yaml`.
