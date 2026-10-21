@@ -1246,15 +1246,17 @@ def load_view():
 
 def write_html(options, rows, warnings, stats, refresh):
     """Ghi trang HTML tĩnh (nguyên tử: file tạm rồi os.replace). Luôn gồm mọi session; trang tự lọc."""
-    from monitor_html import render_html
+    from monitor_html import render_html, render_data_js
     opts = dict(options, all=True)
     payload = json_payload(rows, warnings, stats, opts)
     path = options["html"]
+    data_path = os.path.splitext(path)[0] + ".data.js"
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = f"{path}.tmp{os.getpid()}"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(render_html(payload, refresh))
-    os.replace(tmp, path)
+    for target, text in ((data_path, render_data_js(payload)), (path, render_html(payload, refresh, os.path.basename(data_path)))):
+        tmp = f"{target}.tmp{os.getpid()}"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, target)
 
 def run_once(options):
     snapshot, warnings, rows, stats = load_view()
@@ -1991,8 +1993,10 @@ def self_test():
                   "orchestration": [{"origin": "orchestration", "agent": "codex", "repository": "r", "feature": "f", "task": "T1",
                                      "bucket": "WORKING", "session": "term_1"}], "manual": []}
         page = render_html(sample, 5)
-        check("html-render", "refresh" in page and "Agent Monitor" in page and "term_1" in page)
-        check("html-escape", "</script><b>x" not in page.split('id="data">', 1)[1].split("</script>", 1)[0] and render_html(sample, 0).count("http-equiv") == 0)
+        from monitor_html import render_data_js
+        check("html-render", "Agent Monitor" in page and "term_1" in page and 'REFRESH=5' in page and 'REFRESH=0' in render_html(sample, 0))
+        check("html-escape", "</script><b>x" not in page.split('id="data">', 1)[1].split("</script>", 1)[0])
+        check("html-data-js", render_data_js(sample).startswith("window.__AGENT_MONITOR_DATA = {"))
     except Exception:
         check("html-render", False)
     if failures:

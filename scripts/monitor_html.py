@@ -1,15 +1,14 @@
 """Trang HTML tĩnh cho agent monitor (chỉ đọc). Không phụ thuộc thư viện ngoài, không server.
 
 render_html(payload, refresh_seconds) nhận dict từ json_payload() của agent_monitor.py và trả về
-một chuỗi HTML hoàn chỉnh. refresh_seconds > 0 thêm <meta refresh> để trang tự tải lại khi script
---watch ghi đè file; = 0 là ảnh chụp một lần.
+một chuỗi HTML hoàn chỉnh. refresh_seconds > 0 làm trang nạp lại <tên>.data.js mỗi N giây (script + ?t=, giữ nguyên bộ lọc và
+vị trí cuộn; <meta refresh>/location.reload không đáng tin trong trình duyệt nhúng của Orca); = 0 là ảnh chụp.
 """
 import json
 
 _TEMPLATE = r"""<!doctype html>
 <html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-__REFRESH__
 <title>Agent Monitor</title>
 <style>
 :root{--bg:#f4f6f8;--surface:#fff;--fg:#17202a;--muted:#5d6b78;--line:#dde3e8;--soft:#eef2f5;
@@ -74,7 +73,7 @@ details ul{margin:8px 0 0;padding-left:18px}
 <script type="application/json" id="data">__DATA__</script>
 <script>
 (function(){
-var D=JSON.parse(document.getElementById("data").textContent), REFRESH=__REFRESH_N__;
+var D=JSON.parse(document.getElementById("data").textContent), REFRESH=__REFRESH_N__, DATA_JS="__DATA_JS__";
 var rows=(D.orchestration||[]).concat(D.manual||[]);
 var BUCKETS=[["ATTN","Cần chú ý","i"],["WORKING","Đang làm","w"],["WAITING","Chờ / bị chặn","q"],["COMPLETED","Hoàn thành","c"],["ALL","Tất cả",""]];
 var st={f:"ATTN",q:"",g:"feature"};
@@ -110,20 +109,27 @@ function render(){
 document.getElementById("q").value=st.q;document.getElementById("grp").value=st.g;
 document.getElementById("q").oninput=function(){st.q=this.value;save();render();};
 document.getElementById("grp").onchange=function(){st.g=this.value;save();render();};
-var sm=D.summary||{},src=D.sources||{};
-document.getElementById("meta").innerHTML='Cập nhật <b>'+esc(D.generated_at)+'</b> · '+(sm.total||rows.length)+' session · '+(src.terminals||0)+' terminal · '+(src.runs||0)+' run'+(REFRESH?' · tự tải lại mỗi '+REFRESH+'s':' · ảnh chụp một lần');
+function meta(){var sm=D.summary||{},src=D.sources||{};
+document.getElementById("meta").innerHTML='Cập nhật <b>'+esc(D.generated_at)+'</b> · '+(sm.total||rows.length)+' session · '+(src.terminals||0)+' terminal · '+(src.runs||0)+' run'+(REFRESH?' · cập nhật trực tiếp mỗi '+REFRESH+'s':' · ảnh chụp một lần');}
 function age(){var t=Date.parse(D.generated_at);if(!t||!REFRESH)return;var a=(Date.now()-t)/1000,el=document.getElementById("stale");
   if(a>REFRESH*3+5){el.hidden=false;el.textContent="Dữ liệu đã cũ "+Math.round(a)+"s: script --watch có thể đã dừng.";}else el.hidden=true;}
-render();age();setInterval(age,2000);
+function apply(nd){D=nd;rows=(D.orchestration||[]).concat(D.manual||[]);meta();render();age();}
+meta();render();age();setInterval(age,2000);
+if(REFRESH){setInterval(function(){var el=document.createElement("script");el.src=DATA_JS+"?t="+Date.now();
+ el.onload=function(){if(window.__AGENT_MONITOR_DATA)apply(window.__AGENT_MONITOR_DATA);el.remove();};el.onerror=function(){el.remove();};document.head.appendChild(el);},REFRESH*1000);}
 })();
 </script></body></html>
 """
 
 
-def render_html(payload, refresh_seconds=0):
+def render_html(payload, refresh_seconds=0, data_js_name="agent-monitor.data.js"):
     refresh = int(refresh_seconds or 0)
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-    meta = f'<meta http-equiv="refresh" content="{refresh}">' if refresh > 0 else ""
-    return (_TEMPLATE.replace("__REFRESH__", meta)
-            .replace("__REFRESH_N__", str(refresh))
+    return (_TEMPLATE.replace("__REFRESH_N__", str(refresh))
+            .replace("__DATA_JS__", data_js_name.replace('"', ""))
             .replace("__DATA__", data))
+
+
+def render_data_js(payload):
+    """Dữ liệu cho trang tự cập nhật: trang nạp lại file này (script + ?t=) mỗi N giây, không reload trang."""
+    return "window.__AGENT_MONITOR_DATA = " + json.dumps(payload, ensure_ascii=False) + ";\n"

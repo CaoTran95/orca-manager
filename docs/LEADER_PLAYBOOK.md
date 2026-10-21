@@ -80,7 +80,7 @@ scripts/agent-monitor.sh --json
 scripts/agent-monitor.sh --html ~/.cache/orca-manager/agent-monitor.html [--watch 5]
 ```
 
-Giao diện HTML (chỉ đọc, không server): `--html FILE` ghi một trang HTML; thêm `--watch 5` thì ghi lại mỗi 5 giây, trang tự tải lại và báo khi dữ liệu cũ. Mở trong Orca (đã kiểm chứng trình duyệt nhúng mở được file://): `orca tab create --url file://$HOME/.cache/orca-manager/agent-monitor.html --worktree path:<đường dẫn Orca Manager>`.
+Giao diện HTML (chỉ đọc, không server): `--html FILE` ghi một trang HTML; thêm `--watch 5` thì ghi lại mỗi 5 giây (kèm file `.data.js` cạnh đó); trang tự nạp dữ liệu mới không cần reload (giữ bộ lọc, vị trí cuộn) và báo khi dữ liệu cũ. `<meta refresh>` và `location.reload` không hoạt động trong trình duyệt nhúng của Orca nên không dùng. Mở trong Orca (đã kiểm chứng trình duyệt nhúng mở được file://): `orca tab create --url file://$HOME/.cache/orca-manager/agent-monitor.html --worktree path:<đường dẫn Orca Manager>`.
 
 
 Không truyền chế độ thì dashboard mở trên terminal và tự làm mới mỗi 5 giây, không in chồng bảng. `--once` in một ảnh tĩnh. `--json` xuất một object có `summary`, `orchestration` và `manual`. `--watch` cùng `--json`, hoặc khi stdout không phải terminal, in từng dòng/khung rồi lặp lại.
