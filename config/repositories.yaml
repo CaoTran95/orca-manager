@@ -98,6 +98,30 @@ repositories:
     baseRef: main
     status: verified
     notes: Không có remote; dùng local main.
+  - id: hermes-profile-config
+    name: profile-config
+    selector: name:profile-config
+    remote: git@github.com:CaoTran95/hermes-agent-profiles.git
+    kind: ai-agent-profiles
+    baseRef: origin/develop
+    status: verified
+    notes: Profile bot Hermes (profiles/qa-support, skills). Nằm ở Desktop/android/hermes/profile-config. Checkout chính đang ở nhánh feat/qa-support-seed-refund có thay đổi local; worktree mới tạo từ origin/develop không chứa chúng.
+  - id: hermes-admin-mcp
+    name: bidu-admin-mcp
+    selector: name:bidu-admin-mcp
+    remote: null
+    kind: mcp
+    baseRef: main
+    status: verified
+    notes: MCP tool gọi API admin (TypeScript). Không có remote; dùng main cục bộ. bidu-admin-mcp-seed là worktree có sẵn của repo này (feat/seed-refund-tool); checkout chính có thay đổi local.
+  - id: hermes-qa-web
+    name: qa-support-web
+    selector: name:qa-support-web
+    remote: git@github.com:CaoTran95/qa-support-chatbot.git
+    kind: frontend
+    baseRef: origin/main
+    status: verified
+    notes: Web chatbot qa-support (Desktop/android/hermes/qa-support-web); origin/HEAD là origin/main.
   - id: orca-manager
     name: Orca Manager
     selector: name:Orca Manager
