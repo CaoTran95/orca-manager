@@ -23,9 +23,18 @@ s["skills"].each{|k|
   x=ids[k["repo"]] or (puts "UNKNOWN repo #{k["repo"]}";bad+=1;next)
   base=paths[x["name"]] or next
   ([k["path"]]+(k["also_at"]||[])).each{|p| (puts "MISSING #{k["repo"]}:#{p}";bad+=1) unless File.exist?(File.join(base,p))}}
+# Ownership registry
+o=L.("config/task-ownership.yaml")
+(o["features"]||{}).each{|k,v|
+  (puts "OWNERS #{k}: phải là mảng";bad+=1;next) unless v.is_a?(Array)
+  v.each{|f| ok=(f=~%r{\Adocs/tasks/\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+\.md\z}) && !(f=~%r{/(README|TEMPLATE|HANDOFF_TEMPLATE)\.md\z})
+    (puts "OWNERS #{k}: path không hợp lệ #{f}";bad+=1) unless ok}}
+# Guard hooks: không dùng core.hooksPath (path tuyệt đối sẽ mất hiệu lực khi di chuyển repo); stub nằm ở common-dir/hooks.
 hp=`git config --get core.hooksPath`.strip
-exp=File.join(Dir.pwd,".githooks")
-(puts "HOOKS core.hooksPath=#{hp.inspect}, cần #{exp}";bad+=1) unless hp==exp
-%w[pre-commit pre-merge-commit].each{|h| (puts "HOOKFILE .githooks/#{h} thiếu/không chạy được";bad+=1) unless File.executable?(File.join(exp,h))}
+(puts "HOOKS core.hooksPath=#{hp.inspect} còn đặt; chạy scripts/install-hooks.sh";bad+=1) unless hp.empty?
+`git worktree list --porcelain`.lines.grep(/\Aworktree /).map{|l|l.sub("worktree ","").strip}.each{|w|
+  hd=`git -C "#{w}" rev-parse --path-format=absolute --git-path hooks`.strip
+  %w[pre-commit pre-merge-commit].each{|h| f=File.join(hd,h)
+    (puts "HOOKFILE #{w}: thiếu guard #{h}";bad+=1) unless File.executable?(f) && File.read(f).include?("orca-manager-guard")}}
 puts "repos=#{r["repositories"].size} skills=#{s["skills"].size} problems=#{bad}"
 exit(bad.zero? ? 0 : 1)'

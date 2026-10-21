@@ -103,11 +103,13 @@ Hạn chế implement nghiệp vụ, debug lỗi đơn giản, đọc toàn bộ
 ## Kiểm tra cấu hình
 
 `scripts/check-config.sh` (read-only): YAML hợp lệ, trường baseRef/status của từng repo, mọi repo resolve qua Orca, mọi skill path tồn tại, không còn rule lỗi thời (mặc định develop/main), hooks guard đã bật. Chạy sau khi sửa Harness.
-`scripts/guard-harness.sh` (read-only): ở feature worktree báo file Harness bị sửa trái phép (working tree + commit so với main); chạy tự động qua `.githooks/pre-commit`. Hook không chặn được `--no-verify`, nên Leader chạy guard ở bước Verify.
+`scripts/guard-harness.sh` (read-only): ở feature worktree báo file Harness bị sửa/commit trái phép; chạy qua hook và ở bước Verify (hook không chặn được bypass cố ý). `scripts/harness-status.sh`: hook/guard/độ lệch Harness từng worktree. `scripts/test-guard.sh`: kiểm thử guard trên clone tạm (chạy sau khi sửa guard). Cài hook: `scripts/install-hooks.sh` tại main.
+
+Feature lớn nhiều task con: file mới khai báo `owns:` trong front matter của file chính (`---\nowns:\n  - docs/tasks/<ngày>-<tên>.md\n---`); file đã có trong main hoặc quyền chéo do main duyệt trong `config/task-ownership.yaml`. Leader ở feature worktree chỉ khai báo `owns:` trong file chính của mình, không tự sửa registry.
 
 ## Đồng bộ Harness sang feature worktree
 
-Chỉ khi user yêu cầu và worktree sạch (`git status` không có thay đổi). Feature worktree không tự sync. Việc đồng bộ do user hoặc phiên SETUP thực hiện; nếu worktree đã có commit, ưu tiên không rebase/merge mà dùng Harness từ main đọc trực tiếp (đường dẫn tuyệt đối của main).
+Feature worktree không tự sync; Harness mới không có hiệu lực ở worktree cho tới khi CLAUDE.md/AGENTS.md trong chính worktree đó là bản mới (agent nạp instruction theo cwd). Kiểm tra bằng `scripts/harness-status.sh` (so nội dung, không suy ra từ việc đường dẫn tồn tại). Chỉ đồng bộ khi user yêu cầu và worktree sạch; không rebase/merge/stash worktree có thay đổi local. Hook guard đã áp dụng cho mọi worktree ngay vì nằm ở common-dir.
 
 ## Roadmap (chưa triển khai)
 

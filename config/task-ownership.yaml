@@ -1,0 +1,16 @@
+# Quyền ghi bổ sung cho feature worktree (feat/<key>, "/" -> "-") ngoài quy ước tên
+# docs/tasks/YYYY-MM-DD-<key>[-suffix].md. Danh sách này do main duyệt; feature worktree
+# không tự sửa được. Mỗi path là file docs/tasks/ (không glob, không README/TEMPLATE/HANDOFF_TEMPLATE).
+# File MỚI của feature lớn thì chỉ cần khai báo `owns:` trong front matter của file chính
+# (xem scripts/guard-harness.sh); file ĐÃ có trong main cần được duyệt ở đây.
+version: 1
+features:
+  # Grandfathered 2026-10-21: các branch này đã commit sẵn task record liên quan trước khi có guard.
+  # Chỉ là tài liệu docs/tasks/; user cần rà soát lại có giữ chéo quyền giữa 2 feature hay không.
+  content-translation-ai:
+    - docs/tasks/2026-10-21-case9-expanded.md
+    - docs/tasks/2026-10-21-orca-manager-task-workflow.md
+  orca-manager-task-workflow:
+    - docs/tasks/2026-10-21-case9-expanded.md
+    - docs/tasks/2026-10-21-case9b-input-change.md
+    - docs/tasks/2026-10-21-case9b-marketing-processing.md

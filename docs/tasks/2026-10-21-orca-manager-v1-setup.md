@@ -63,6 +63,14 @@ Chưa chạy: giao worker thật (không có feature để giao; tránh khởi c
 - Thay rule cũ "origin/develop, fallback origin/main" bằng `baseRef` + `status` trong `config/repositories.yaml` (đổi tên trường `base_branch` -> `baseRef`); thiếu/chưa verified => hỏi user.
 - AGENTS.md viết lại làm nguồn duy nhất; CLAUDE.md và `.cursor/rules` chỉ tóm tắt/trỏ về.
 - Thêm mode SETUP/MONITOR/EXECUTE/REVIEW, vai trò Leader/Worker, xác minh dispatch, Harness ownership.
-- Guard mới: `scripts/guard-harness.sh`, `.githooks/pre-commit`, `.githooks/pre-merge-commit` (bật bằng `core.hooksPath` tuyệt đối tới main); `scripts/check-config.sh` kiểm tra baseRef/status, rule lỗi thời, hooks.
+- Guard mới: `scripts/guard-harness.sh`, hooks pre-commit và pre-merge-commit; `scripts/check-config.sh` kiểm tra baseRef/status, rule lỗi thời, hooks.
 - Validation: `scripts/check-config.sh` problems=0; guard kiểm tra trên clone tạm và worktree thật.
 - Phát hiện: worktree `feat-orca-manager-task-workflow` đang có thay đổi docs/tasks của feature khác (case9*); chưa xử lý, chờ user.
+
+## Update 2026-10-21 — Hoàn thiện Harness Guard (mode SETUP, main)
+
+- Sửa lỗi bc62c96: `core.hooksPath` tuyệt đối trỏ `.githooks` im lặng mất hiệu lực khi di chuyển repo (đã tái hiện) -> thay bằng stub trong `<git-common-dir>/hooks` (`scripts/install-hooks.sh`), tự tìm main lúc chạy; xóa `.githooks/`.
+- Guard v2: ownership = naming + `owns:` ở file chính (file mới) + `config/task-ownership.yaml` do main duyệt (file đã có/chéo); từ chối symlink/glob/template; `git status -z`; chỉ xét commit chưa có trong main; nội dung trùng main (merge đồng bộ) không bị chặn; `.serena/` bị chặn khi stage.
+- Phát hiện: 2 feature worktree hiện có (content-translation-ai, orca-manager-task-workflow) đã commit task record con/chéo -> guard v1 báo vi phạm; grandfather vào `config/task-ownership.yaml`, cần user rà soát.
+- Mới: `scripts/test-guard.sh` (25 ca trên clone tạm), `scripts/harness-status.sh`.
+- Chưa kiểm chứng: Claude/Codex/Cursor thực sự nạp instruction nào khi mở trong feature worktree (suy ra từ cơ chế cwd, chưa chạy thử); Orca có tạo worktree bằng cách khác bỏ qua common-dir hooks hay không.

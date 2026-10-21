@@ -10,5 +10,5 @@ Follow AGENTS.md (single source of truth) and docs/ORCA_MANAGER_GUIDE.md.
 - Create or update docs/tasks/YYYY-MM-DD-<feature-key>.md before implementation.
 - Create worktrees only from the verified `baseRef` of that repo in config/repositories.yaml. Never default to origin/develop or origin/main; if baseRef is missing or unverified, stop and ask the user.
 - Reuse an existing worktree for feat/<feature-key>; record repo, baseRef, branch, path and status before editing code.
-- Harness (AGENTS.md, CLAUDE.md, config/, scripts/, .githooks/, playbook, templates) is editable only on Orca Manager main. In a feat/* worktree touch only that feature's docs/tasks file.
+- Harness (AGENTS.md, CLAUDE.md, config/, scripts/, playbook, templates) is editable only on Orca Manager main. In a feat/* worktree touch only that feature's docs/tasks file.
 - Do not reset, force-checkout, delete, or overwrite an existing worktree or local change. Do not commit credentials, .env, .serena/ or node_modules/. If a repo, branch, credential or remote is unavailable, record it as blocked with evidence.

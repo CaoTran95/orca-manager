@@ -22,7 +22,7 @@ Gửi cho worker (Codex/Cursor). Giữ ngắn; không dán lịch sử feature.
 - Phải áp dụng skill/rule trên; nêu trong báo cáo đã dùng gì. Không tạo/sửa/sao chép skill. Nếu thiếu skill, dùng code + tài liệu có sẵn và báo thiếu.
 
 ## Không được làm
-- Sửa Harness của Orca Manager (AGENTS.md, CLAUDE.md, config/, scripts/, .githooks/, playbook, templates, management skills). Thấy Harness lỗi: báo Leader, không tự sửa.
+- Sửa Harness của Orca Manager (AGENTS.md, CLAUDE.md, config/, scripts/, playbook, templates, management skills). Thấy Harness lỗi: báo Leader, không tự sửa.
 - Sửa ngoài phạm vi; reset/force-push/xóa worktree; merge vào branch bảo vệ; commit .env/credential.
 - Đổi kiến trúc hoặc API contract: dừng và escalate.
 

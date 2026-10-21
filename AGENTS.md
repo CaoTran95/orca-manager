@@ -6,15 +6,20 @@ Nguồn sự thật: `config/repositories.yaml` (repo + `baseRef`), `config/skil
 
 ## 1. Harness ownership & isolation
 
-Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.githooks/`, `.claude/skills/`, `config/`, `scripts/`, `docs/LEADER_PLAYBOOK.md`, `docs/ORCA_MANAGER_GUIDE.md`, `docs/tasks/{README,TEMPLATE,HANDOFF_TEMPLATE}.md`, management skills.
+Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.claude/skills/`, `config/`, `scripts/`, `docs/LEADER_PLAYBOOK.md`, `docs/ORCA_MANAGER_GUIDE.md`, `docs/tasks/{README,TEMPLATE,HANDOFF_TEMPLATE}.md`, management skills.
 
 - Chỉ worktree `main` của Orca Manager được sửa Harness.
-- Worktree `feat/*` của Orca Manager chỉ được tạo/sửa `docs/tasks/YYYY-MM-DD-<feature-key>[-suffix].md` của CHÍNH feature đó (khớp tên branch `feat/<feature-key>`).
+- Worktree `feat/*` của Orca Manager chỉ được tạo/sửa task record được phân quyền (guard kiểm tra, không chỉ dựa vào tên file):
+  1. `docs/tasks/YYYY-MM-DD-<feature-key>[-suffix].md` (khớp `feat/<feature-key>`; `/` trong tên branch -> `-`);
+  2. feature lớn nhiều task con: file MỚI khai báo trong front matter `owns:` (danh sách path docs/tasks/, không glob) của file chính `YYYY-MM-DD-<feature-key>.md`;
+  3. file docs/tasks/ ĐÃ có trong main hoặc quyền chéo: chỉ khi main duyệt trong `config/task-ownership.yaml`.
+  Không bao giờ ghi được README/TEMPLATE/HANDOFF_TEMPLATE, symlink, hay file ngoài docs/tasks/.
 - Ở `feat/*` cấm: sửa Harness; tạo/sửa/xóa management skill; đổi config; đổi script/quy trình; tự sync/cherry-pick/rebase/merge từ main; giao worker sửa Harness; tự chuyển sang main để né quy tắc.
 - Phát hiện Harness lỗi: ghi Change Request (đề xuất + bằng chứng) vào task file của feature, báo user, chờ xử lý tại main.
 - Không tự chuyển branch/đồng bộ khi có thay đổi chưa commit. Nâng cấp Harness chỉ khi user yêu cầu rõ.
-- Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` (kiểm tra thay đổi trái phép ở feature worktree) chạy tự động qua `.githooks/pre-commit` và `pre-merge-commit`, và chạy trong `scripts/check-config.sh`. Hook phải được bật: `git config core.hooksPath "<đường dẫn tuyệt đối tới Orca Manager/main>/.githooks"` (config dùng chung mọi worktree). Trước mọi thao tác ghi, kiểm tra worktree hiện tại và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
-
+- Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` kiểm tra working tree, file staged và commit của branch (so với main); nội dung trùng khít main (đồng bộ do user duyệt) không bị coi là sai lệch. Chạy tự động qua hook `pre-commit` và `pre-merge-commit`, được cài bằng `scripts/install-hooks.sh` (tại main) vào `<git-common-dir>/hooks` dùng chung mọi worktree, tự tìm main lúc chạy nên không phụ thuộc path và không dùng `core.hooksPath` (path tuyệt đối sẽ im lặng mất hiệu lực khi di chuyển repo). Hook không chặn được bypass cố ý, nên Leader chạy `scripts/guard-harness.sh` ở bước Verify; `scripts/harness-status.sh` liệt kê hook/guard/độ lệch Harness của mọi worktree; `scripts/test-guard.sh` là bộ kiểm thử guard.
+- Instruction của agent nạp theo cwd của worktree: Harness mới chỉ có hiệu lực ở worktree khi file CLAUDE.md/AGENTS.md TRONG worktree đó đã là bản mới. Đọc đường dẫn của main không đồng nghĩa agent đã áp dụng; kiểm tra bằng `scripts/harness-status.sh`.
+- Trước mọi thao tác ghi, kiểm tra git worktree và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
 ## 2. Execution modes
 
 | Mode | Được làm | Không được làm |
@@ -74,4 +79,6 @@ orca terminal list --json --limit 200
 git -C /path/to/repo status --short --branch
 scripts/check-config.sh          # YAML, repo, skill path, policy, guard
 scripts/guard-harness.sh         # kiểm tra thay đổi Harness trái phép
+scripts/harness-status.sh        # hook/guard/độ lệch Harness của từng worktree (read-only)
+scripts/test-guard.sh            # kiểm thử guard trên clone tạm
 ~~~
