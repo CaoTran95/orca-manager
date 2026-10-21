@@ -39,7 +39,7 @@ case "$1 $2" in
     while [ $# -gt 0 ]; do case "$1" in --repo) shift; name=${1#name:};; --name) shift; wtname=$1;; --base-branch) shift; base=$1;; esac; shift; done
     [ "${FAKE_FAIL_REPO:-}" = "$name" ] && { echo '{"ok":false,"error":"boom"}'; exit 1; }
     path=$(ruby -rjson -e 'puts JSON.parse(File.read(ENV["FAKE_REPOS"])).find{|r|r["displayName"]==ARGV[0]}["path"]' "$name")
-    dir="$FAKE_WS/$name/$wtname"; br="feat/$wtname"; [ "${FAKE_BAD_BRANCH:-}" = "$name" ] && br="feat-other"
+    dir="$FAKE_WS/$name/$wtname"; br="feat/$wtname"; [ "${FAKE_BAD_BRANCH:-}" = "$name" ] && br="feat-other"; [ "${FAKE_NOPREFIX:-}" = "$name" ] && br="$wtname"
     git -C "$path" worktree add -q -b "$br" "$dir" "$base" || exit 1
     git -C "$dir" config user.email t@t; git -C "$dir" config user.name t
     printf '{"ok":true,"result":{"worktree":{"id":"repo-%s::%s","path":"%s","branch":"refs/heads/%s"}}}\n' "$name" "$dir" "$dir" "$br";;
@@ -100,4 +100,7 @@ tg="$T/ws/Orca Manager/gamma/docs/tasks/$(date +%Y-%m-%d)-gamma.md"
 out=$(FAKE_BAD_BRANCH=biz "$NT" delta --repo biz --apply 2>&1); rc=$?
 [ $rc = 1 ] && [[ "$out" == *"khác feat/delta"* ]] && ok "branch mismatch stops without renaming" 1 || ok "mismatch" 0
 
+# 9. Orca không thêm tiền tố feat/: đổi tên branch mới tạo
+out=$(FAKE_NOPREFIX=biz "$NT" epsilon --repo biz --apply 2>&1); rc=$?
+[ $rc = 0 ] && [ "$(git -C "$T/ws/biz/epsilon" symbolic-ref --short HEAD)" = feat/epsilon ] && ok "unprefixed branch from Orca renamed to feat/<key>" 1 || { ok "unprefixed rename" 0; echo "$out" | tail -4; }
 echo "pass=$pass fail=$fail"; [ "$fail" = 0 ]

@@ -78,6 +78,12 @@ create_wt(){ # id name path base  -> in ra path thực; trả 1 nếu lỗi
   out=$("$ORCA" worktree create --repo "name:$name" --name "$key" --base-branch "$base" --no-parent --setup inherit --json 2>&1) || { echo "orca worktree create lỗi ($id): $out" >&2; return 1; }
   wt=$(printf '%s' "$out" | ruby -rjson -e 'w=JSON.parse(STDIN.read)["result"]["worktree"]; puts "#{w["id"]}\t#{w["path"]}\t#{w["branch"]}"' 2>/dev/null) || { echo "không đọc được kết quả create ($id): $out" >&2; return 1; }
   IFS=$'\t' read -r WT_ID WT_PATH br <<<"$wt"
+  # Orca có thể không thêm tiền tố feat/ (tuỳ repo). Chỉ khi branch vừa tạo đúng bằng <key> và feat/<key> chưa tồn tại
+  # mới đổi tên (branch mới tinh do chính script này tạo); mọi trường hợp khác dừng.
+  if [ "${br#refs/heads/}" = "$key" ] && ! git -C "$repo" show-ref --verify --quiet "refs/heads/feat/$key"; then
+    git -C "$WT_PATH" branch -m "$key" "feat/$key" || { echo "không đổi được tên branch $key -> feat/$key ở $WT_PATH" >&2; return 1; }
+    br="refs/heads/feat/$key"; echo "ghi chú: Orca đặt branch '$key'; đã đổi thành feat/$key ($WT_PATH)"
+  fi
   [ "${br#refs/heads/}" = "feat/$key" ] || { echo "branch thực tế '$br' khác feat/$key ở $WT_PATH — dừng, xử lý thủ công (không tự đổi tên)" >&2; return 1; }
   "$ORCA" worktree set --worktree "id:$WT_ID" --display-name "$key · $id" --json >/dev/null 2>&1 || echo "WARN: không đặt được display name cho $id" >&2
   return 0
