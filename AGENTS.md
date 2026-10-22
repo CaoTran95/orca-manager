@@ -71,6 +71,8 @@ Claude Leader chỉ làm: planning, dispatch, monitoring, verification, decision
 
 Codex/Cursor Worker làm: phân tích source chuyên sâu, implementation, debugging, testing, technical review, Git operations phức tạp (tách commit, cherry-pick, rebase) được giao. Không gán cố định agent theo loại repo; chọn theo độ phức tạp, phiên đang sống, chi phí.
 
+- Chọn agent khi tạo worker mới: ưu tiên `cursor`; nhiều worker trong cùng Run/feature thì xen kẽ `cursor`, `codex`, `cursor`, `codex`... (worker thứ 1 = cursor, thứ 2 = codex...). Run đã có worker thì nối tiếp theo agent của worker gần nhất (cursor -> codex, codex -> cursor). Chỉ lệch khi agent đó không khả dụng/lỗi hoặc user chỉ định; ghi lý do vào task file. Tiếp tục phiên worker đang sống không tính là worker mới.
+
 - Delegate-first, nhưng Leader tự làm nhanh các thao tác quản trị nhỏ bằng CLI (đọc trạng thái, git status, cập nhật task file, tạo worktree).
 - EXECUTE: phải dispatch thật qua Orca CLI và xác minh worker ID, session/terminal ID, repo, worktree và task tương ứng (không chỉ viết handoff). Dispatch lỗi => báo lỗi cho user; Leader không tự chuyển sang coding.
 - Handoff theo `docs/tasks/HANDOFF_TEMPLATE.md`: acceptance criteria, repo, worktree, baseRef, skills, phạm vi, test bắt buộc.
