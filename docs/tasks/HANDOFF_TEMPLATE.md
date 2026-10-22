@@ -1,6 +1,6 @@
 # Task Handoff: <TASK-ID> — <mục tiêu một dòng>
 
-Gửi cho worker (Codex/Cursor). Giữ ngắn; không dán lịch sử feature.
+Gửi cho worker (Codex/Cursor/Freebuff). Giữ ngắn; không dán lịch sử feature.
 
 - Feature: <feature-key> | Task: <TASK-ID> | Depends on: <task-id hoặc none>
 - Repo: <repo id trong config/repositories.yaml>

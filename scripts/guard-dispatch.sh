@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only preflight trước khi giao việc cho worker (Codex/Cursor): Worker Isolation.
+# Read-only preflight trước khi giao việc cho worker (Codex/Cursor/Freebuff): Worker Isolation.
 # Dùng: guard-dispatch.sh <worktree-path> [--kind business|harness]
 #   Từ chối nếu path là:
 #     - checkout chính của Orca Manager (main) hoặc của bất kỳ repo nghiệp vụ đã đăng ký trong Orca;

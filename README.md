@@ -1,13 +1,13 @@
 # Orca Manager
 
-Harness điều phối nhiều repo và worktree trên Orca cho Claude (Leader) cùng Codex/Cursor (Worker). Không có server, DB hay web app; chỉ gồm tài liệu, cấu hình và script shell/Python.
+Harness điều phối nhiều repo và worktree trên Orca cho Claude (Leader) cùng Codex/Cursor/Freebuff (Worker). Không có server, DB hay web app; chỉ gồm tài liệu, cấu hình và script shell/Python.
 
 Quy tắc ràng buộc nằm ở [`AGENTS.md`](AGENTS.md) (nguồn duy nhất); README này chỉ giới thiệu và chỉ đường.
 
 ## Cách hoạt động
 
 - **Leader (Claude)** lập kế hoạch, giao việc, theo dõi, kiểm chứng, quyết định.
-- **Worker (Codex/Cursor)** làm việc trong linked worktree `feat/<feature-key>`. Worker mới ưu tiên Cursor, nhiều worker thì xen kẽ Cursor/Codex.
+- **Worker (Codex/Cursor/Freebuff)** làm việc trong linked worktree `feat/<feature-key>`. Worker mới ưu tiên Cursor, nhiều worker thì xen kẽ Cursor/Codex; Freebuff dùng khi được chỉ định hoặc khi hai agent kia không khả dụng.
 - Mỗi tính năng có một **task record** trong `docs/tasks/`, tạo trước khi triển khai. Chỉ đặt `DONE` khi có bằng chứng kiểm chứng.
 - **Harness chỉ sửa ở `main`.** Ở `feat/*` chỉ được ghi `docs/tasks/` của chính tính năng đó.
 - Worktree mới chỉ tạo từ `baseRef` đã `verified` trong `config/repositories.yaml`.
@@ -16,7 +16,7 @@ Quy tắc ràng buộc nằm ở [`AGENTS.md`](AGENTS.md) (nguồn duy nhất); 
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `AGENTS.md` | Quy tắc cho mọi agent (Claude, Codex, Cursor) |
+| `AGENTS.md` | Quy tắc cho mọi agent (Claude, Codex, Cursor, Freebuff) |
 | `CLAUDE.md`, `.cursor/rules/` | Trỏ về `AGENTS.md` cho từng agent |
 | `config/repositories.yaml` | Danh mục repo: `baseRef`, `status`, remote |
 | `config/skill-registry.yaml` | Domain skill theo repo và loại task |

@@ -1,6 +1,6 @@
 # Orca Manager agent instructions
 
-Áp dụng cho Claude, Codex, Cursor và mọi agent làm việc từ project này. `CLAUDE.md` chỉ trỏ về đây; không lặp lại quy tắc ở nơi khác.
+Áp dụng cho Claude, Codex, Cursor, Freebuff và mọi agent làm việc từ project này. `CLAUDE.md` chỉ trỏ về đây; không lặp lại quy tắc ở nơi khác.
 
 Nguồn sự thật: `config/repositories.yaml` (repo + `baseRef`), `config/skill-registry.yaml` (mục lục skill), `docs/LEADER_PLAYBOOK.md` (điều phối), `docs/tasks/` (trạng thái task), `docs/ORCA_MANAGER_GUIDE.md` (lệnh Orca chi tiết).
 
@@ -21,9 +21,9 @@ Harness = `CLAUDE.md`, `AGENTS.md`, `.cursor/`, `.claude/skills/`, `config/`, `s
 - Guard (không chỉ dựa vào văn bản): `scripts/guard-harness.sh` kiểm tra working tree, file staged và commit của branch (so với main); nội dung trùng khít main (đồng bộ do user duyệt) không bị coi là sai lệch. Chạy tự động qua hook `pre-commit` và `pre-merge-commit`, được cài bằng `scripts/install-hooks.sh` (tại main) vào `<git-common-dir>/hooks` dùng chung mọi worktree, tự tìm main lúc chạy nên không phụ thuộc path và không dùng `core.hooksPath` (path tuyệt đối sẽ im lặng mất hiệu lực khi di chuyển repo). Hook không chặn được bypass cố ý, nên Leader chạy `scripts/guard-harness.sh` ở bước Verify; `scripts/harness-status.sh` liệt kê hook/guard/độ lệch Harness của mọi worktree; `scripts/test-guard.sh` là bộ kiểm thử guard.
 - Instruction nạp theo cwd (đã kiểm chứng bằng probe 2026-10-21): Claude chỉ nạp CLAUDE.md của worktree (AGENTS.md chỉ được tham chiếu, chưa nạp) cộng `~/.claude` và memory index của project Orca Manager (dùng chung mọi worktree); Codex nạp AGENTS.md của worktree; Cursor nạp `.cursor/rules`, CLAUDE.md và AGENTS.md của worktree. Không agent nào tự đọc Harness ở main: Harness mới chỉ có hiệu lực khi các file đó TRONG worktree là bản mới. Kiểm tra bằng `scripts/harness-status.sh`; đường dẫn tồn tại không có nghĩa là đã áp dụng.
 - Trước mọi thao tác ghi, kiểm tra git worktree và đường dẫn đích; file Harness ở feature worktree => từ chối và báo cáo.
-### Worker Isolation (Codex/Cursor không chỉnh sửa main)
+### Worker Isolation (Codex/Cursor/Freebuff không chỉnh sửa main)
 
-- Worker (Codex/Cursor) KHÔNG BAO GIỜ ghi trực tiếp vào checkout main của Orca Manager hay checkout chính của repo nghiệp vụ; chỉ làm trong linked worktree được giao. Leader chạy `scripts/guard-dispatch.sh <worktree> [--kind business|harness]` trước mỗi lần dispatch; bị từ chối thì không giao.
+- Worker (Codex/Cursor/Freebuff) KHÔNG BAO GIỜ ghi trực tiếp vào checkout main của Orca Manager hay checkout chính của repo nghiệp vụ; chỉ làm trong linked worktree được giao. Leader chạy `scripts/guard-dispatch.sh <worktree> [--kind business|harness]` trước mỗi lần dispatch; bị từ chối thì không giao.
 - Cần worker soạn thay đổi Harness: user duyệt một branch `harness/<topic>` trong `harness_staging` (`config/task-ownership.yaml`, sửa ở main) -> tạo worktree riêng -> giao với `--kind harness` -> Leader review diff -> `scripts/integrate-harness.sh harness/<topic>` tại main (kiểm tra check-config + test-guard trong staging trước, fast-forward, xác nhận bằng tên branch). Main đã tiến thì rebase staging bằng `scripts/sync-harness.sh --apply` trước.
 - Phát hiện: hook `commit-msg` chặn commit trên main mang trailer `Co-authored-by` của Codex/Cursor; `check-config.sh` cảnh báo khi main có thay đổi chưa commit. Giới hạn đã kiểm chứng: Codex/Cursor không đặt biến môi trường nhận diện nên không chặn được theo danh tính; dựa vào dispatch preflight + phát hiện sau.
 
@@ -69,9 +69,10 @@ Có thể làm các bước 1-7 bằng `scripts/new-task.sh <feature-key> --repo
 
 Claude Leader chỉ làm: planning, dispatch, monitoring, verification, decision-making.
 
-Codex/Cursor Worker làm: phân tích source chuyên sâu, implementation, debugging, testing, technical review, Git operations phức tạp (tách commit, cherry-pick, rebase) được giao. Không gán cố định agent theo loại repo; chọn theo độ phức tạp, phiên đang sống, chi phí.
+Codex/Cursor/Freebuff Worker làm: phân tích source chuyên sâu, implementation, debugging, testing, technical review, Git operations phức tạp (tách commit, cherry-pick, rebase) được giao. Không gán cố định agent theo loại repo; chọn theo độ phức tạp, phiên đang sống, chi phí.
 
-- Chọn agent khi tạo worker mới: ưu tiên `cursor`; nhiều worker trong cùng Run/feature thì xen kẽ `cursor`, `codex`, `cursor`, `codex`... (worker thứ 1 = cursor, thứ 2 = codex...). Run đã có worker thì nối tiếp theo agent của worker gần nhất (cursor -> codex, codex -> cursor). Chỉ lệch khi agent đó không khả dụng/lỗi hoặc user chỉ định; ghi lý do vào task file. Tiếp tục phiên worker đang sống không tính là worker mới.
+- Danh mục worker: `cursor`, `codex`, `freebuff`. Freebuff (CLI `freebuff`, đã cài ở `/opt/homebrew/bin/freebuff`) không nằm trong danh sách `--agent` của Orca nên chưa dispatch tự động được; giao qua terminal đang chạy `freebuff` trong đúng worktree (`orca orchestration worker-start --terminal <handle>` hoặc `orca terminal send`). Chưa kiểm chứng freebuff nạp `AGENTS.md`/`CLAUDE.md` theo cwd, nên luôn truyền path và quy tắc tường minh trong handoff, và chạy `scripts/guard-dispatch.sh` trước.
+- Chọn agent khi tạo worker mới: ưu tiên `cursor`; nhiều worker trong cùng Run/feature thì xen kẽ `cursor`, `codex`, `cursor`, `codex`... (worker thứ 1 = cursor, thứ 2 = codex...). Run đã có worker thì nối tiếp theo agent của worker gần nhất (cursor -> codex, codex -> cursor). Vòng xoay mặc định chỉ gồm cursor/codex; freebuff dùng khi user chỉ định hoặc khi cursor/codex không khả dụng/lỗi, rồi quay lại vòng xoay; ghi lý do vào task file. Tiếp tục phiên worker đang sống không tính là worker mới.
 
 - Delegate-first, nhưng Leader tự làm nhanh các thao tác quản trị nhỏ bằng CLI (đọc trạng thái, git status, cập nhật task file, tạo worktree).
 - EXECUTE: phải dispatch thật qua Orca CLI và xác minh worker ID, session/terminal ID, repo, worktree và task tương ứng (không chỉ viết handoff). Dispatch lỗi => báo lỗi cho user; Leader không tự chuyển sang coding.
