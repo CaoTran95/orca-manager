@@ -122,6 +122,14 @@ repositories:
     baseRef: origin/main
     status: verified
     notes: Web chatbot qa-support (Desktop/android/hermes/qa-support-web); origin/HEAD là origin/main.
+  - id: rea
+    name: REA
+    selector: name:REA
+    remote: null
+    kind: reverse-engineering
+    baseRef: main
+    status: verified
+    notes: Project phân tích ứng dụng bằng MCP rea-agents (Desktop/android/REA), repo git riêng. Không có remote; dùng main cục bộ. app/ và source/* bị ignore.
   - id: orca-manager
     name: Orca Manager
     selector: name:Orca Manager
