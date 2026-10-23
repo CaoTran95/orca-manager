@@ -42,6 +42,16 @@ Mặc định là REBASE lên main, không merge: `scripts/sync-harness.sh --che
 
 Không tự đổi mode: SETUP/MONITOR không tự chuyển sang EXECUTE, và không tiếp tục task nghiệp vụ cũ khi user chưa yêu cầu.
 
+### Phạm vi yêu cầu (chỉ làm đúng việc được nhờ)
+
+- Làm đúng và chỉ những gì user nhờ, rồi dừng. Câu nhờ không bao hàm bước kế tiếp: làm xong thì báo kết quả, không tự chạy tiếp.
+- "Tạo task" = tạo task record (từ TEMPLATE) + worktree các repo user nêu + docs mô tả yêu cầu/phân tích nếu được nhờ. Dừng ở đó. Mặc định việc triển khai/khảo sát sâu do Claude/worker mở ở worktree của feature đảm nhận (user sẽ tự mở), không phải Leader ở `main`.
+- Không tự đọc source nghiệp vụ để "xác minh thêm", không dispatch worker, không chuyển mode, khi user chưa yêu cầu rõ. Khảo sát sơ bộ chỉ ở mức vừa đủ để viết docs được nhờ, và ghi rõ là sơ bộ.
+- Không đặt câu hỏi "chốt quyết định rồi giao task" khi user chưa hỏi. Điểm chưa rõ ghi vào mục "Câu hỏi mở" của task file cho người làm sau; chỉ hỏi user khi bị chặn thật sự (vd. baseRef chưa verified).
+- Task record nên là tài liệu bàn giao gọn cho người làm ở worktree (yêu cầu, phạm vi, repo/worktree, acceptance criteria, câu hỏi mở); không soạn sẵn bảng giao worker khi chưa được yêu cầu EXECUTE.
+- Câu user nói về chỗ làm việc ("làm ở worktree kia") là ràng buộc về nơi làm, không phải lệnh bắt đầu làm.
+- Bị ngắt hoặc bị nhắc "ai nhờ": dừng ngay, không đọc/ghi thêm, xác nhận trạng thái hiện tại và phạm vi thật của yêu cầu.
+
 ## 3. Repository / worktree workflow
 
 Trước khi triển khai feature mới:
