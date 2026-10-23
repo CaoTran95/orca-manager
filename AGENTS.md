@@ -93,6 +93,10 @@ Codex/Cursor/Freebuff Worker làm: phân tích source chuyên sâu, implementati
 ## 6. Task record
 
 Cập nhật tại mỗi mốc: yêu cầu/phạm vi; bảng repo/baseRef/branch/worktree; tiến độ; lệnh + kết quả validation; commit/push/MR; thay đổi local/untracked; blocker và bước tiếp.
+
+- Task file phải khớp thực tế: dòng Status, bảng Tasks (worker/session) và Progress được cập nhật ngay khi dispatch hoặc có kết quả; không để ghi "chưa dispatch" khi đã có worker chạy.
+- Bằng chứng và deliverable của worker (báo cáo review, spec, HOWTO) phải nằm trong repo/task file (`docs/tasks/` hoặc đường dẫn trong worktree được giao) hoặc được tóm tắt kèm lệnh + kết quả vào task file. Không chỉ để ở thư mục tạm/scratchpad (`/private/tmp/...`) vì sẽ mất khi dọn.
+- Task chưa có review độc lập thì ở REVIEW, không đặt DONE. Giới hạn độ sâu worker lồng nhau và cách xử lý: `docs/LEADER_PLAYBOOK.md`.
 Trạng thái task: `TODO → READY → IN_PROGRESS → REVIEW → DONE`, ngoại lệ `BLOCKED`, `FAILED`, `WAITING_APPROVAL` (file cũ dùng planned/in-progress/completed/blocked/paused vẫn được chấp nhận). Không tuyên bố hoàn thành khi thiếu bằng chứng.
 
 ## 7. Lệnh hữu ích

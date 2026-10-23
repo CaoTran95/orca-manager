@@ -39,6 +39,15 @@ Skill vận hành dùng bản chính thức của Orca (`orchestration`, `orca-c
 7. **Verify**: xem bên dưới. Chưa đạt -> gửi chỉnh sửa cụ thể (`orchestration send`/`terminal send`) thay vì tự sửa.
 8. **Approve & báo cáo**: cập nhật task file, tổng hợp tiến độ/test/blocker/quyết định cần người dùng duyệt.
 
+## Mô hình điều phối nhiều tầng và giới hạn Orca
+
+- Hai mô hình: (a) Leader ở `main` giao thẳng worker (độ sâu 1); (b) Leader giao cho một Claude chạy ở worktree feature, Claude đó tự giao cursor/codex (độ sâu 2). Mặc định là (a). Dùng (b) chỉ khi user mở/giao Claude ở worktree feature.
+- Orca giới hạn **Nested worker depth** (Settings → Orchestration trong app Orca; không đổi được bằng CLI). Đã đặt **2** (2026-10-23, user xác nhận) để (b) chạy được. Không nâng lên 3+: thêm tầng tự giao việc làm khó theo dõi, tốn chi phí, khó quy trách nhiệm; worker chỉ implement/review, không điều phối. Tạo Run mới không reset độ sâu của người gọi.
+- Lỗi `nested_worker_depth_exceeded` / `Sub-worker dispatch is not permitted at depth N`: kiểm tra cài đặt trên, không né bằng cách tạo run con. Chưa thể nâng => người ở tầng đó tự làm và ghi rõ "chưa có review độc lập", hoặc Leader giao reviewer từ run của Leader.
+- Lỗi `consumer_fenced`: một terminal đang hành động thay cho phiên khác (vd. gọi `worker-start` trên Run do Leader tạo). Mỗi tầng tạo và dùng Run của chính mình (`run-create` rồi `worker-start --run`), không dùng Run của tầng trên.
+- Sau khi đổi cài đặt, kiểm bằng một worker nhỏ (vd. review chỉ đọc) trước khi giao việc lớn.
+- Task chưa có review độc lập thì ở REVIEW, chưa DONE.
+
 ## Delegate → Verify → Correct → Approve
 
 Chỉ đặt DONE khi đủ bằng chứng theo acceptance criteria. Lời báo "xong" của worker không đủ.
